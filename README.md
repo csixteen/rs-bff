@@ -5,3 +5,13 @@ I don't know Rust, so I've decided to make a port of my [original](https://githu
 ---
 
 I'm still pretty n00b in Rust and I'm currently still reading the [Rust book](https://doc.rust-lang.org/book/), which is pretty awesome btw. So apologies in advance if the code sucks. If you have any suggestions for improving the code, feel free to open a PR :D
+
+## How to run
+
+```
+$ cargo run hello.bff
+    Finished dev [unoptimized + debuginfo] target(s) in 0.01s
+     Running `target/debug/rs-bff hello.bf`
+Hello, world!
+Hello, world!
+```
