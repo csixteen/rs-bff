@@ -9,7 +9,7 @@ I'm still pretty n00b in Rust and I'm currently still reading the [Rust book](ht
 ## How to run
 
 ```
-$ cargo run hello.bff
+$ cargo run hello.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff hello.bf`
 Hello, world!
