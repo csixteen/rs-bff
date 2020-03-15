@@ -15,3 +15,7 @@ $ cargo run hello.bf
 Hello, world!
 Hello, world!
 ```
+
+## Limitations
+
+There are several! But I'd say that one of the main limitations is that the interpreter assumes the source code to be correct. For instance if you have square brackets without the matching opening of closing square bracket, then you will end up with very unexpected results.
