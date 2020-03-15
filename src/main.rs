@@ -97,10 +97,10 @@ impl<'a> Program<'a> {
         // If I just leave as `self.ip += offset as usize` then
         // I get a runtime error saying that I'm attempting to subtract
         // with overflow.
-        if offset < 0 {
-            self.ip -= offset.abs() as usize;
+        self.ip = if offset < 0 {
+            self.ip - offset.abs() as usize
         } else {
-            self.ip += offset as usize;
+            self.ip + offset as usize
         }
     }
 
