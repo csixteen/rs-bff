@@ -38,16 +38,16 @@ fn getch() -> u8 {
 // --------------------------------------------------
 // `Program` struct and implementation
 
-struct Program<'a> {
-    code: &'a Vec<char>,     // Brainfuck code
+struct Program {
+    code: Vec<char>,     // Brainfuck code
     ip: usize,               // Instruction pointer
     cursor: usize,           // Memory cursor
     stack: VecDeque<usize>,  // Program stack
     memory: Vec<u8>,         // Memory
 }
 
-impl<'a> Program<'a> {
-    fn new(code: &Vec<char>) -> Program {
+impl Program {
+    fn new(code: Vec<char>) -> Program {
         Program {
             code: code,
             ip: 0,
@@ -152,5 +152,5 @@ fn main() {
         }
     };
 
-    Program::new(&load_code(file_name)).execute();
+    Program::new(load_code(file_name)).execute();
 }
