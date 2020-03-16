@@ -118,7 +118,7 @@ impl<'a> Program<'a> {
 // Reads the contents of a source file and returns
 // a Vector with the chars that only represent valid
 // Brainfuck operators: <>+-,.[]
-fn load_code(file_name: &str) -> Vec<char> {
+fn load_code(file_name: String) -> Vec<char> {
     let contents = fs::read_to_string(file_name)
         .expect("Couldn't read from file");
 
@@ -139,13 +139,18 @@ fn load_code(file_name: &str) -> Vec<char> {
 
 // Entry point
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let mut args = env::args();
 
-    if args.len() < 2 {
-        eprintln!("Usage: <prog> <filename.bf>");
-        
-        process::exit(1);
-    }
+    args.next();
 
-    Program::new(&load_code(&args[1])).execute();
+    let file_name = match args.next() {
+        Some(arg) => arg,
+        None => {
+            eprintln!("Missing source file. Usage: <prog> <filename.bf>");
+
+            process::exit(1);
+        }
+    };
+
+    Program::new(&load_code(file_name)).execute();
 }
