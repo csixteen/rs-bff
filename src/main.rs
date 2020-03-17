@@ -2,7 +2,6 @@ extern crate termios;
 
 use std::char;
 use std::collections::VecDeque;
-use std::convert::TryInto;
 use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
@@ -61,7 +60,9 @@ impl Program {
         let mut offset: i32 = 1;
 
         match self.code[self.ip] {
-            '<' => self.cursor -= 1,
+            '<' => if self.cursor > 0 {
+                self.cursor -= 1;
+            }
             '>' => self.cursor += 1,
             '+' => self.memory[self.cursor] += 1,
             '-' => if self.memory[self.cursor] > 0 {
@@ -80,10 +81,7 @@ impl Program {
                         .iter()
                         .skip(self.ip + 1)
                         .position(|&x| x == ']')
-                        .unwrap()
-                        .try_into()
-                        .unwrap();
-                    offset += 1;
+                        .unwrap() as i32 + 1;
                 }
             }
             ']' => {
