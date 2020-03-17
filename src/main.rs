@@ -39,7 +39,7 @@ fn getch() -> u8 {
 // `Program` struct and implementation
 
 struct Program {
-    code: Vec<char>,     // Brainfuck code
+    code: Vec<char>,         // Brainfuck code
     ip: usize,               // Instruction pointer
     cursor: usize,           // Memory cursor
     stack: VecDeque<usize>,  // Program stack
@@ -64,7 +64,9 @@ impl Program {
             '<' => self.cursor -= 1,
             '>' => self.cursor += 1,
             '+' => self.memory[self.cursor] += 1,
-            '-' => self.memory[self.cursor] -= 1,
+            '-' => if self.memory[self.cursor] > 0 {
+                self.memory[self.cursor] -= 1;
+            }
             '.' => {
                 let c = char::from_u32(self.memory[self.cursor].into()).unwrap();
                 print!("{}", c);
@@ -74,7 +76,6 @@ impl Program {
                 if self.memory[self.cursor] > 0 {
                     self.stack.push_front(self.ip);
                 } else {
-                    self.stack.pop_front();
                     offset = self.code
                         .iter()
                         .skip(self.ip + 1)
@@ -82,12 +83,14 @@ impl Program {
                         .unwrap()
                         .try_into()
                         .unwrap();
+                    offset += 1;
                 }
             }
             ']' => {
-                let v = self.stack.pop_front();
-                if self.memory[self.cursor] > 0 {
-                    offset = (v.unwrap() as i32) - (self.ip as i32);
+                if self.memory[self.cursor] == 0 {
+                    self.stack.pop_front();
+                } else {
+                    offset = (self.stack[0] as i32) - (self.ip as i32) + 1;
                 }
             }
             _ => (),
