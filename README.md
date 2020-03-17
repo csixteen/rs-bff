@@ -13,8 +13,9 @@ $ cargo run hello.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff hello.bf`
 Hello, world!
-Hello, world!
 ```
+
+Some of the "Hello World!" examples were taken from [here](https://github.com/brain-lang/brainfuck/blob/master/brainfuck.md).
 
 ## Limitations
 
