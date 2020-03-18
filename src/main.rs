@@ -60,9 +60,7 @@ impl Program {
         let mut offset: i32 = 1;
 
         match self.code[self.ip] {
-            '<' => if self.cursor > 0 {
-                self.cursor -= 1;
-            }
+            '<' => self.cursor -= 1,
             '>' => self.cursor += 1,
             '+' => self.memory[self.cursor] += 1,
             '-' => if self.memory[self.cursor] > 0 {
@@ -77,11 +75,25 @@ impl Program {
                 if self.memory[self.cursor] > 0 {
                     self.stack.push_front(self.ip);
                 } else {
-                    offset = self.code
-                        .iter()
-                        .skip(self.ip + 1)
-                        .position(|&x| x == ']')
-                        .unwrap() as i32 + 1;
+                    let mut i = self.ip + 1;
+                    let mut skipped = 0;
+
+                    while i < self.code.len() {
+                        match self.code[i] {
+                            '[' => skipped += 1,
+                            ']' => if skipped == 0 {
+                                i += 1;
+                                break;
+                            } else {
+                                skipped -= 1;
+                            }
+                            _ => (),
+                        }
+
+                        i += 1;
+                    }
+
+                    offset = i as i32 - self.ip as i32;
                 }
             }
             ']' => {
