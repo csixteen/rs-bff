@@ -1,4 +1,4 @@
-.PHONY: test
+.PHONY: install test
 
 FILES := $(shell find ./tests/ -name "*.bf" -exec basename -s .bf {} \;)
 JOBS := $(addprefix job,${FILES})
