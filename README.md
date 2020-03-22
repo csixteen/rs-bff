@@ -1,27 +1,43 @@
 # rs-bff
 
-I don't know Rust, so I've decided to make a port of my [original](https://github.com/csixteen/py-bff) Python Brainfuck interpreter to Rust. I guess this sort of became my toy project for when I want to solidify some concepts while learning a new language. I've done the same for [Go](https://github.com/csixteen/go-bff) and I'll probably do the same for other languages.
+I don't know Rust, so I've decided to write a simple [Brainfuck](https://esolangs.org/wiki/Brainfuck) interpreter to practice.
 
 ---
 
 I'm still pretty n00b in Rust and I'm currently still reading the [Rust book](https://doc.rust-lang.org/book/), which is pretty awesome btw. So apologies in advance if the code sucks. If you have any suggestions for improving the code, feel free to open a PR :D
 
-## How to run
+# Installing
 
 ```
-$ cargo run hello.bf
-    Finished dev [unoptimized + debuginfo] target(s) in 0.01s
-     Running `target/debug/rs-bff hello.bf`
+$ make install
+```
+
+# Usage
+
+```
+USAGE:
+    rs-bff [OPTIONS] --source <FILE>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -s, --source <FILE>    File with Brainfuck source code.
+    -n, --num-cells <N>    Number of cells (default: 30,000)
+```
+
+```
+$ rs-bff --source hello.bf
 Hello, world!
 ```
 
-Some of the "Hello World!" examples were taken from [here](https://github.com/brain-lang/brainfuck/blob/master/brainfuck.md).
+Some of the tests were taken from [here](https://github.com/brain-lang/brainfuck/blob/master/brainfuck.md) and [here](https://github.com/rdebath/Brainfuck)
 
 ## Limitations
 
-There are several! But I'd say that one of the main limitations is that the interpreter assumes the source code to be correct. For instance if you have square brackets without the matching opening or closing square bracket, then you will end up with very unexpected results.
-Also the "memory" is hardcoded to be 30000 8-bit cells.
+It only works with 8-bit cells and only supports ASCII.
 
 ## Bugs
 
-Check the Issues section.
+Please report any issues that you find. Or feel free to open a PR, it will be very welcome!
