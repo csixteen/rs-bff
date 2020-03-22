@@ -75,3 +75,7 @@ It only works with 8-bit cells and only supports ASCII.
 ## Bugs
 
 Please report any issues that you find. Or feel free to open a PR, it will be very welcome!
+
+## LICENSE
+
+See [LICENSE](https://github.com/csixteen/rs-bff/blob/master/LICENSE).
