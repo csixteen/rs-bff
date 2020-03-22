@@ -1,11 +1,12 @@
+extern crate clap;
 extern crate termios;
 
 use std::char;
 use std::collections::VecDeque;
-use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
-use std::process;
+
+use clap::{Arg, App};
 
 use termios::{Termios, TCSANOW, ECHO, ICANON, tcsetattr};
 
@@ -42,17 +43,17 @@ struct Program {
     ip: usize,               // Instruction pointer
     cursor: usize,           // Memory cursor
     stack: VecDeque<usize>,  // Program stack
-    memory: Vec<u8>,         // Memory
+    cells: Vec<u8>,          // 8-bit cells
 }
 
 impl Program {
-    fn new(code: Vec<char>) -> Program {
+    fn new(code: Vec<char>, n: usize) -> Program {
         Program {
             code: code,
             ip: 0,
             cursor: 0,
             stack: VecDeque::new(),
-            memory: vec![0; 30000],
+            cells: vec![0; n],
         }
     }
 
@@ -60,19 +61,17 @@ impl Program {
         let mut offset: i32 = 1;
 
         match self.code[self.ip] {
-            '<' => self.cursor -= 1,
-            '>' => self.cursor += 1,
-            '+' => self.memory[self.cursor] += 1,
-            '-' => if self.memory[self.cursor] > 0 {
-                self.memory[self.cursor] -= 1;
-            }
+            '<' => self.cursor = self.cursor.wrapping_sub(1),
+            '>' => self.cursor = self.cursor.wrapping_add(1),
+            '+' => self.cells[self.cursor] = self.cells[self.cursor].wrapping_add(1),
+            '-' => self.cells[self.cursor] = self.cells[self.cursor].wrapping_sub(1),
             '.' => {
-                let c = char::from_u32(self.memory[self.cursor].into()).unwrap();
+                let c = char::from_u32(self.cells[self.cursor].into()).unwrap();
                 print!("{}", c);
             }
-            ',' => self.memory[self.cursor] = getch(),
+            ',' => self.cells[self.cursor] = getch(),
             '[' => {
-                if self.memory[self.cursor] > 0 {
+                if self.cells[self.cursor] > 0 {
                     self.stack.push_front(self.ip);
                 } else {
                     let mut i = self.ip + 1;
@@ -97,7 +96,7 @@ impl Program {
                 }
             }
             ']' => {
-                if self.memory[self.cursor] == 0 {
+                if self.cells[self.cursor] == 0 {
                     self.stack.pop_front();
                 } else {
                     offset = (self.stack[0] as i32) - (self.ip as i32) + 1;
@@ -106,15 +105,7 @@ impl Program {
             _ => (),
         }
 
-        // I'm still a bit unsure how to properly solve this case.
-        // If I just leave as `self.ip += offset as usize` then
-        // I get a runtime error saying that I'm attempting to subtract
-        // with overflow.
-        self.ip = if offset < 0 {
-            self.ip - offset.abs() as usize
-        } else {
-            self.ip + offset as usize
-        }
+        self.ip = self.ip.wrapping_add(offset as usize)
     }
 
     fn execute(&mut self) {
@@ -131,7 +122,7 @@ impl Program {
 // Reads the contents of a source file and returns
 // a Vector with the chars that only represent valid
 // Brainfuck operators: <>+-,.[]
-fn load_code(file_name: String) -> Vec<char> {
+fn load_code(file_name: &str) -> Vec<char> {
     let contents = fs::read_to_string(file_name)
         .expect("Couldn't read from file");
 
@@ -152,18 +143,32 @@ fn load_code(file_name: String) -> Vec<char> {
 
 // Entry point
 fn main() {
-    let mut args = env::args();
+    let matches = App::new("Brainfuck interpreter in Rust")
+                        .version("0.1.0")
+                        .author("Pedro Rodrigues <csixteen@protonmail.com>")
+                        .arg(Arg::with_name("file_name")
+                             .short("s")
+                             .long("source")
+                             .value_name("FILE")
+                             .help("File with Brainfuck source code.")
+                             .takes_value(true)
+                             .required(true))
+                        .arg(Arg::with_name("num_cells")
+                             .short("n")
+                             .long("num-cells")
+                             .value_name("N")
+                             .help("Number of cells (default: 30,000)")
+                             .takes_value(true))
+                        .get_matches();
 
-    args.next();
+    let file_name = matches.value_of("file_name").unwrap();
+    let num_cells: usize = matches.value_of("num_cells")
+                                    .unwrap_or("30000")
+                                    .parse()
+                                    .unwrap();
 
-    let file_name = match args.next() {
-        Some(arg) => arg,
-        None => {
-            eprintln!("Missing source file. Usage: <prog> <filename.bf>");
-
-            process::exit(1);
-        }
-    };
-
-    Program::new(load_code(file_name)).execute();
+    Program::new(
+        load_code(file_name),
+        num_cells,
+    ).execute();
 }
