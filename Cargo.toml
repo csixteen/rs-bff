@@ -3,6 +3,8 @@ name = "rs-bff"
 version = "0.1.0"
 authors = ["Pedro Rodrigues <csixteen@protonmail.com>"]
 edition = "2018"
+description = "A simple Brainfuck interpreter."
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
