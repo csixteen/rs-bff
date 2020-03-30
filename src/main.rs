@@ -147,8 +147,6 @@ fn main() {
                         .version("0.1.0")
                         .author("Pedro Rodrigues <csixteen@protonmail.com>")
                         .arg(Arg::with_name("file_name")
-                             .short("s")
-                             .long("source")
                              .value_name("FILE")
                              .help("File with Brainfuck source code.")
                              .takes_value(true)

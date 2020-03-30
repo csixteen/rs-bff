@@ -23,12 +23,11 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -s, --source <FILE>    File with Brainfuck source code.
     -n, --num-cells <N>    Number of cells (default: 30,000)
 ```
 
 ```
-$ rs-bff --source hello.bf
+$ rs-bff hello.bf
 Hello, world!
 ```
 
@@ -38,30 +37,30 @@ Some of the tests were taken from [here](https://github.com/brain-lang/brainfuck
 
 ```
 $ make test
-cargo run -- --source tests/hello6.bf
+cargo run tests/hello6.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.12s
      Running `target/debug/rs-bff --source tests/hello6.bf`
 Hello World!
-cargo run -- --source tests/hello2.bf
+cargo run tests/hello2.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff --source tests/hello2.bf`
 Hello, world!
-cargo run -- --source tests/hello3.bf
+cargo run tests/hello3.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff --source tests/hello3.bf`
 Hello World!
-cargo run -- --source tests/add_two.bf
+cargo run tests/add_two.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff --source tests/add_two.bf`
-7cargo run -- --source tests/hello.bf
+7cargo run tests/hello.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff --source tests/hello.bf`
 Hello, world!
-cargo run -- --source tests/hello4.bf
+cargo run tests/hello4.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff --source tests/hello4.bf`
 Hello World!
-cargo run -- --source tests/hello5.bf
+cargo run tests/hello5.bf
     Finished dev [unoptimized + debuginfo] target(s) in 0.01s
      Running `target/debug/rs-bff --source tests/hello5.bf`
 Hello, world!
