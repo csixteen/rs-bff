@@ -16,7 +16,7 @@ $ make install
 
 ```
 USAGE:
-    rs-bff [OPTIONS] --source <FILE>
+    rs-bff [OPTIONS] <FILE>
 
 FLAGS:
     -h, --help       Prints help information
