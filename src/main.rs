@@ -1,15 +1,9 @@
-extern crate clap;
-extern crate termios;
-
 use std::char;
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{self, Read, Write};
 
-use clap::{Arg, App};
-
-use termios::{Termios, TCSANOW, ECHO, ICANON, tcsetattr};
-
+use termios::{ECHO, ICANON, TCSANOW, Termios, tcsetattr};
 
 // --------------------------------------------------
 // Helpers
@@ -26,24 +20,23 @@ fn getch() -> u8 {
     tcsetattr(stdin, TCSANOW, &mut new_termios).unwrap();
     let stdout = io::stdout();
     let mut reader = io::stdin();
-    let mut buffer = [0;1];  // read exactly one byte
+    let mut buffer = [0; 1]; // read exactly one byte
     stdout.lock().flush().unwrap();
     reader.read_exact(&mut buffer).unwrap();
-    tcsetattr(stdin, TCSANOW, & termios).unwrap();
+    tcsetattr(stdin, TCSANOW, &termios).unwrap();
 
     buffer[0]
 }
-
 
 // --------------------------------------------------
 // `Program` struct and implementation
 
 struct Program {
-    code: Vec<char>,         // Brainfuck code
-    ip: usize,               // Instruction pointer
-    cursor: usize,           // Memory cursor
-    stack: VecDeque<usize>,  // Program stack
-    cells: Vec<u8>,          // 8-bit cells
+    code: Vec<char>,        // Brainfuck code
+    ip: usize,              // Instruction pointer
+    cursor: usize,          // Memory cursor
+    stack: VecDeque<usize>, // Program stack
+    cells: Vec<u8>,         // 8-bit cells
 }
 
 impl Program {
@@ -80,11 +73,13 @@ impl Program {
                     while i < self.code.len() {
                         match self.code[i] {
                             '[' => skipped += 1,
-                            ']' => if skipped == 0 {
-                                i += 1;
-                                break;
-                            } else {
-                                skipped -= 1;
+                            ']' => {
+                                if skipped == 0 {
+                                    i += 1;
+                                    break;
+                                } else {
+                                    skipped -= 1;
+                                }
                             }
                             _ => (),
                         }
@@ -115,58 +110,23 @@ impl Program {
     }
 }
 
-
 // ------------------------------------------------------
-
 
 // Reads the contents of a source file and returns
 // a Vector with the chars that only represent valid
 // Brainfuck operators: <>+-,.[]
 fn load_code(file_name: &str) -> Vec<char> {
-    let contents = fs::read_to_string(file_name)
-        .expect("Couldn't read from file");
+    let contents = fs::read_to_string(file_name).expect("Couldn't read from file");
 
     contents
         .chars()
-        .filter(|c| {
-            match c {
-                '<' | '>' | '+' | '-' | ',' | '.' | '[' | ']' => true,
-                _ => false,
-            }
+        .filter(|c| match c {
+            '<' | '>' | '+' | '-' | ',' | '.' | '[' | ']' => true,
+            _ => false,
         })
         .collect::<Vec<char>>()
 }
 
-
-// -------------------------------------------------------
-
-
-// Entry point
 fn main() {
-    let matches = App::new("Brainfuck interpreter in Rust")
-                        .version("0.1.0")
-                        .author("Pedro Rodrigues <csixteen@protonmail.com>")
-                        .arg(Arg::with_name("file_name")
-                             .value_name("FILE")
-                             .help("File with Brainfuck source code.")
-                             .takes_value(true)
-                             .required(true))
-                        .arg(Arg::with_name("num_cells")
-                             .short("n")
-                             .long("num-cells")
-                             .value_name("N")
-                             .help("Number of cells (default: 30,000)")
-                             .takes_value(true))
-                        .get_matches();
-
-    let file_name = matches.value_of("file_name").unwrap();
-    let num_cells: usize = matches.value_of("num_cells")
-                                    .unwrap_or("30000")
-                                    .parse()
-                                    .unwrap();
-
-    Program::new(
-        load_code(file_name),
-        num_cells,
-    ).execute();
+    println!("hello, world!");
 }
