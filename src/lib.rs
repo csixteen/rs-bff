@@ -1,5 +1,3 @@
-#![warn(unused_crate_dependencies)]
-
 use std::io::{self, Read, Write};
 
 use termios::{ECHO, ICANON, TCSANOW, Termios, tcsetattr};
@@ -8,9 +6,9 @@ pub const DEFAULT_NUM_CELLS: usize = 30_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("CHANGE_ME")]
+    #[error("invalid data pointer")]
     DataPointerOutOfBounds,
-    #[error("CHANGE_ME")]
+    #[error("invalid memory access")]
     InvalidMemoryAccess,
     #[error("could not convert {0} into a valid char")]
     InvalidCharacter(u8),
@@ -18,6 +16,8 @@ pub enum Error {
     InvalidBracket(u8),
     #[error("no matching bracket found for symbol at <{0}>")]
     NoMatchingBracket(usize),
+    #[error("end of program has been reached")]
+    EndOfProgram,
     #[error(transparent)]
     Io(#[from] ::std::io::Error),
 }
@@ -39,6 +39,7 @@ pub struct AbstractMachine<'a> {
 }
 
 impl<'a> AbstractMachine<'a> {
+    /// Creates a new Brainfuck abstract machine to run the given program.
     pub fn new(program: &'a [u8]) -> Self {
         Self {
             dp: 0,
@@ -49,12 +50,14 @@ impl<'a> AbstractMachine<'a> {
         }
     }
 
+    /// Given an abstract machine, it initializes its memory with [`num_cells`] set to zero.
     pub fn with_num_cells(mut self, num_cells: usize) -> Self {
         self.mem = vec![0_u8; num_cells];
         self
     }
 
-    pub fn with_mem(mut self, mem: Vec<u8>) -> Self {
+    #[cfg(test)]
+    fn with_mem(mut self, mem: Vec<u8>) -> Self {
         self.mem = mem;
         self
     }
@@ -65,10 +68,26 @@ impl<'a> AbstractMachine<'a> {
         self
     }
 
-    pub fn run(&mut self) {}
+    pub fn run(&mut self) -> Result<()> {
+        loop {
+            if let Err(e) = self.step() {
+                match e {
+                    Error::EndOfProgram => {
+                        break;
+                    }
+                    _ => return Err(e),
+                }
+            }
+        }
 
+        Ok(())
+    }
+
+    /// Executes the next command indexed by the instruction pointer.
     pub fn step(&mut self) -> Result<()> {
-        let command = self.program[self.ip];
+        let Some(command) = self.program.get(self.ip) else {
+            return Err(Error::EndOfProgram);
+        };
 
         let ip = match command {
             b'>' => self.execute_shr()?,
@@ -152,6 +171,7 @@ impl<'a> AbstractMachine<'a> {
         Ok(InstructionPointer::Next)
     }
 
+    // output the byte at the data pointer
     fn execute_out(&mut self) -> Result<InstructionPointer> {
         let byte = self.read_byte()?;
         let c = char::from_u32(byte.into()).ok_or(Error::InvalidCharacter(byte))?;
@@ -223,7 +243,7 @@ fn find_matching(pos: usize, code: &[u8]) -> Result<usize> {
     Err(Error::NoMatchingBracket(pos))
 }
 
-pub fn getchar() -> Result<u8> {
+fn getchar() -> Result<u8> {
     let fd = 0; // stdin
     // Fetch the current termios struct, so that we can restore once we're done.
     let curr_termios = Termios::from_fd(fd)?;

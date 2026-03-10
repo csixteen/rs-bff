@@ -1,132 +1,45 @@
-use std::char;
-use std::collections::VecDeque;
-use std::fs;
-use std::io::{self, Read, Write};
+use std::{
+    fs,
+    io::{self, Read},
+    path::PathBuf,
+};
 
-use termios::{ECHO, ICANON, TCSANOW, Termios, tcsetattr};
+use clap::{Parser, ValueHint};
+use rs_bff::{AbstractMachine, DEFAULT_NUM_CELLS};
 
-// --------------------------------------------------
-// Helpers
+/// Brainfuck interpreter
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Number of memory cells that the abstract machine will operate on
+    #[arg(short, long, default_value_t = DEFAULT_NUM_CELLS)]
+    cells: usize,
 
-// Reads a single char from stdin without the need for the user to
-// hit "Enter".
-// https://stackoverflow.com/questions/26321592/how-can-i-read-one-character-from-stdin-without-having-to-hit-enter
-fn getch() -> u8 {
-    let stdin = 0;
-    let termios = Termios::from_fd(stdin).unwrap();
-    let mut new_termios = termios.clone();
-
-    new_termios.c_lflag &= !(ICANON | ECHO);
-    tcsetattr(stdin, TCSANOW, &mut new_termios).unwrap();
-    let stdout = io::stdout();
-    let mut reader = io::stdin();
-    let mut buffer = [0; 1]; // read exactly one byte
-    stdout.lock().flush().unwrap();
-    reader.read_exact(&mut buffer).unwrap();
-    tcsetattr(stdin, TCSANOW, &termios).unwrap();
-
-    buffer[0]
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
+    file: Option<PathBuf>,
 }
 
-// --------------------------------------------------
-// `Program` struct and implementation
+fn main() -> anyhow::Result<()> {
+    let Args { cells, file } = Args::parse();
+    let program = read_program(file)?;
+    let mut machine = AbstractMachine::new(&program).with_num_cells(cells);
 
-struct Program {
-    code: Vec<char>,        // Brainfuck code
-    ip: usize,              // Instruction pointer
-    cursor: usize,          // Memory cursor
-    stack: VecDeque<usize>, // Program stack
-    cells: Vec<u8>,         // 8-bit cells
-}
-
-impl Program {
-    fn new(code: Vec<char>, n: usize) -> Program {
-        Program {
-            code: code,
-            ip: 0,
-            cursor: 0,
-            stack: VecDeque::new(),
-            cells: vec![0; n],
-        }
+    if let Err(e) = machine.run() {
+        eprintln!("{}", e);
+        return Err(e.into());
     }
 
-    fn execute_instruction(&mut self) {
-        let mut offset: i32 = 1;
-
-        match self.code[self.ip] {
-            '<' => self.cursor = self.cursor.wrapping_sub(1),
-            '>' => self.cursor = self.cursor.wrapping_add(1),
-            '+' => self.cells[self.cursor] = self.cells[self.cursor].wrapping_add(1),
-            '-' => self.cells[self.cursor] = self.cells[self.cursor].wrapping_sub(1),
-            '.' => {
-                let c = char::from_u32(self.cells[self.cursor].into()).unwrap();
-                print!("{}", c);
-            }
-            ',' => self.cells[self.cursor] = getch(),
-            '[' => {
-                if self.cells[self.cursor] > 0 {
-                    self.stack.push_front(self.ip);
-                } else {
-                    let mut i = self.ip + 1;
-                    let mut skipped = 0;
-
-                    while i < self.code.len() {
-                        match self.code[i] {
-                            '[' => skipped += 1,
-                            ']' => {
-                                if skipped == 0 {
-                                    i += 1;
-                                    break;
-                                } else {
-                                    skipped -= 1;
-                                }
-                            }
-                            _ => (),
-                        }
-
-                        i += 1;
-                    }
-
-                    offset = i as i32 - self.ip as i32;
-                }
-            }
-            ']' => {
-                if self.cells[self.cursor] == 0 {
-                    self.stack.pop_front();
-                } else {
-                    offset = (self.stack[0] as i32) - (self.ip as i32) + 1;
-                }
-            }
-            _ => (),
-        }
-
-        self.ip = self.ip.wrapping_add(offset as usize)
-    }
-
-    fn execute(&mut self) {
-        while self.ip < self.code.len() {
-            self.execute_instruction();
-        }
-    }
+    Ok(())
 }
 
-// ------------------------------------------------------
-
-// Reads the contents of a source file and returns
-// a Vector with the chars that only represent valid
-// Brainfuck operators: <>+-,.[]
-fn load_code(file_name: &str) -> Vec<char> {
-    let contents = fs::read_to_string(file_name).expect("Couldn't read from file");
-
-    contents
-        .chars()
-        .filter(|c| match c {
-            '<' | '>' | '+' | '-' | ',' | '.' | '[' | ']' => true,
-            _ => false,
-        })
-        .collect::<Vec<char>>()
-}
-
-fn main() {
-    println!("hello, world!");
+fn read_program(file: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
+    match file {
+        Some(f) => Ok(fs::read(f)?),
+        None => {
+            let mut buffer = Vec::new();
+            let mut stdin = io::stdin();
+            stdin.read_to_end(&mut buffer)?;
+            Ok(buffer)
+        }
+    }
 }
