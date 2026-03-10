@@ -5,7 +5,7 @@ JOBS := $(addprefix job,${FILES})
 
 test: ${JOBS} ; @echo "[$@] finished!"
 
-${JOBS}: job%: ; cargo run tests/$*.bf
+${JOBS}: job%: ; cargo run -- -f tests/$*.bf
 
 install:
 	cargo install --path .
