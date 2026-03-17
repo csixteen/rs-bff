@@ -2,8 +2,6 @@ use std::io::{self, Read, Write};
 
 use termios::{ECHO, ICANON, TCSANOW, Termios, tcsetattr};
 
-pub const DEFAULT_NUM_CELLS: usize = 30_000;
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid data pointer")]
@@ -39,11 +37,13 @@ pub struct AbstractMachine<'a> {
 }
 
 impl<'a> AbstractMachine<'a> {
+    pub const DEFAULT_NUM_CELLS: usize = 30_000;
+
     /// Creates a new Brainfuck abstract machine to run the given program.
     pub fn new(program: &'a [u8]) -> Self {
         Self {
             dp: 0,
-            mem: vec![0_u8; DEFAULT_NUM_CELLS],
+            mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],
             ip: 0,
             program,
             stack: Vec::new(),

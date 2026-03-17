@@ -5,14 +5,14 @@ use std::{
 };
 
 use clap::{Parser, ValueHint};
-use rs_bff::{AbstractMachine, DEFAULT_NUM_CELLS};
+use rs_bff::AbstractMachine;
 
 /// Brainfuck interpreter
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// Number of memory cells that the abstract machine will operate on
-    #[arg(short, long, default_value_t = DEFAULT_NUM_CELLS)]
+    #[arg(short, long, default_value_t = AbstractMachine::DEFAULT_NUM_CELLS)]
     cells: usize,
 
     #[arg(short, long, value_hint = ValueHint::FilePath)]
