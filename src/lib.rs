@@ -1,4 +1,7 @@
-use std::io::{self, Read, Write};
+use std::{
+    io::{self, Read, Write},
+    sync::{Arc, Mutex},
+};
 
 use termios::{ECHO, ICANON, TCSANOW, Termios, tcsetattr};
 
@@ -18,11 +21,12 @@ pub enum Error {
     EndOfProgram,
     #[error(transparent)]
     Io(#[from] ::std::io::Error),
+    #[error("couldn't acquire the mutex")]
+    Mutex,
 }
 
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;
 
-#[derive(Debug)]
 pub struct AbstractMachine<'a> {
     // Data pointer, indicating the current cell being pointed at.
     dp: usize,
@@ -32,8 +36,10 @@ pub struct AbstractMachine<'a> {
     ip: usize,
     // The actual Brainfuck source code that we're running.
     program: &'a [u8],
-    // FIXME
+    // Stack used to sture the program offsets with the location of opening square brackets
     stack: Vec<usize>,
+    // Optional writer where the `.` command will write onto. If `None`, then STDOUT will be used.
+    writer: Option<Arc<Mutex<dyn io::Write>>>,
 }
 
 impl<'a> AbstractMachine<'a> {
@@ -47,12 +53,18 @@ impl<'a> AbstractMachine<'a> {
             ip: 0,
             program,
             stack: Vec::new(),
+            writer: None,
         }
     }
 
     /// Given an abstract machine, it initializes its memory with [`num_cells`] set to zero.
     pub fn with_num_cells(mut self, num_cells: usize) -> Self {
         self.mem = vec![0_u8; num_cells];
+        self
+    }
+
+    pub fn with_writer(mut self, writer: Arc<Mutex<dyn io::Write>>) -> Self {
+        self.writer = Some(writer);
         self
     }
 
@@ -175,8 +187,17 @@ impl<'a> AbstractMachine<'a> {
     fn execute_out(&mut self) -> Result<InstructionPointer> {
         let byte = self.read_byte()?;
         let c = char::from_u32(byte.into()).ok_or(Error::InvalidCharacter(byte))?;
-        let mut lock = io::stdout().lock();
-        write!(lock, "{}", c)?;
+
+        match &self.writer {
+            Some(w) => {
+                let mut lock = w.try_lock().map_err(|_| Error::Mutex)?;
+                write!(lock, "{}", c)?;
+            }
+            None => {
+                let mut lock = io::stdout().lock();
+                write!(lock, "{}", c)?;
+            }
+        }
 
         Ok(InstructionPointer::Next)
     }
