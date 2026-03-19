@@ -22,7 +22,8 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let Args { cells, file } = Args::parse();
     let program = read_program(file)?;
-    let mut machine = AbstractMachine::new(&program).with_num_cells(cells);
+    let mut writer = io::stdout();
+    let mut machine = AbstractMachine::new(&program, &mut writer).with_num_cells(cells);
 
     if let Err(e) = machine.run() {
         eprintln!("{}", e);
@@ -32,6 +33,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Reads the program from `file`, if it's `Some(path)`, or from STDIN otherwise.
 fn read_program(file: Option<PathBuf>) -> anyhow::Result<Vec<u8>> {
     match file {
         Some(f) => Ok(fs::read(f)?),
