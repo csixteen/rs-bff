@@ -1,11 +1,15 @@
+mod reader;
+
 use std::{
     fs,
     io::{self, Read},
     path::PathBuf,
 };
 
+use bff_core::AbstractMachine;
 use clap::{Parser, ValueHint};
-use rs_bff::{AbstractMachine, TermiosReader};
+
+use self::reader::TermiosReader;
 
 /// Brainfuck interpreter
 #[derive(Debug, Parser)]
