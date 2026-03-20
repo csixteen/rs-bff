@@ -5,7 +5,7 @@ use std::{
 };
 
 use clap::{Parser, ValueHint};
-use rs_bff::AbstractMachine;
+use rs_bff::{AbstractMachine, TermiosReader};
 
 /// Brainfuck interpreter
 #[derive(Debug, Parser)]
@@ -22,8 +22,10 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let Args { cells, file } = Args::parse();
     let program = read_program(file)?;
+    let mut reader = TermiosReader;
     let mut writer = io::stdout();
-    let mut machine = AbstractMachine::new(&program, &mut writer).with_num_cells(cells);
+    let mut machine =
+        AbstractMachine::new(&program, &mut reader, &mut writer).with_num_cells(cells);
 
     if let Err(e) = machine.run() {
         eprintln!("{}", e);

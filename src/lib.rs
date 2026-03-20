@@ -1,28 +1,11 @@
+mod error;
+mod ext;
+
 use std::io::{self, Read, Write};
 
 use termios::{ECHO, ICANON, TCSANOW, Termios, tcsetattr};
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("invalid data pointer")]
-    DataPointerOutOfBounds,
-    #[error("invalid memory access")]
-    InvalidMemoryAccess,
-    #[error("could not convert {0} into a valid char")]
-    InvalidCharacter(u8),
-    #[error("'{0}' is not a valid bracket")]
-    InvalidBracket(u8),
-    #[error("no matching bracket found for symbol at <{0}>")]
-    NoMatchingBracket(usize),
-    #[error("end of program has been reached")]
-    EndOfProgram,
-    #[error(transparent)]
-    Io(#[from] ::std::io::Error),
-    #[error("couldn't acquire the mutex")]
-    Mutex,
-}
-
-pub type Result<T, E = Error> = ::std::result::Result<T, E>;
+pub use self::{error::*, ext::*};
 
 pub struct AbstractMachine<'a> {
     // Data pointer, indicating the current cell being pointed at.
@@ -35,6 +18,7 @@ pub struct AbstractMachine<'a> {
     program: &'a [u8],
     // Stack used to sture the program offsets with the location of opening square brackets
     stack: Vec<usize>,
+    reader: &'a mut dyn ReadOne,
     // A writer where the output command will write onto.
     writer: &'a mut dyn io::Write,
 }
@@ -43,13 +27,18 @@ impl<'a> AbstractMachine<'a> {
     pub const DEFAULT_NUM_CELLS: usize = 30_000;
 
     /// Creates a new Brainfuck abstract machine to run the given program and a writer.
-    pub fn new(program: &'a [u8], writer: &'a mut dyn io::Write) -> Self {
+    pub fn new(
+        program: &'a [u8],
+        reader: &'a mut dyn ReadOne,
+        writer: &'a mut dyn io::Write,
+    ) -> Self {
         Self {
             dp: 0,
             mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],
             ip: 0,
             program,
             stack: Vec::new(),
+            reader,
             writer,
         }
     }
@@ -169,7 +158,7 @@ impl<'a> AbstractMachine<'a> {
 
     // accept one byte of input, storing its value in the byte at the data pointer
     fn execute_in(&mut self) -> Result<InstructionPointer> {
-        let c = getchar()?;
+        let c = self.reader.read_one()?;
         self.write_byte(c)?;
 
         Ok(InstructionPointer::Next)
@@ -249,39 +238,40 @@ fn find_matching(pos: usize, program: &[u8]) -> Result<usize> {
     Err(Error::NoMatchingBracket(pos))
 }
 
-// A bit of a hacky way of reading exactly one byte from STDIN without requiring a newline
-// character.
-fn getchar() -> Result<u8> {
-    let mut buffer = [0_u8; 1];
-    let fd = 0; // stdin
-    // Fetch the current termios struct, so that we can restore once we're done.
-    let curr_termios = Termios::from_fd(fd)?;
+pub struct TermiosReader;
 
-    {
-        // Copy the current termios, set the flags we're interested in, and then apply
-        let mut new_termios = curr_termios;
-        // We're doing two things here:
-        // * disabling canonical mode
-        // * disabling echoing input characters
-        //
-        // Canonical mode is set by default. In canonical mode, the input is made available line by
-        // line, when the line delimiter is inserted. Except for EOL, the line delimiter is included
-        // in the buffer returned by read. We don't want that. In noncanonical mode, the
-        // input is made available.
-        new_termios.c_lflag &= !(ICANON | ECHO);
-        // Set the parameters associated with the terminal from the new_termios struct. The flag
-        // TCSANOW means that changes are effective immediately.
-        tcsetattr(fd, TCSANOW, &new_termios)?;
-        // We want to read exactly one byte from stdin
-        let mut reader = io::stdin();
-        io::stdout().flush()?;
-        reader.read_exact(&mut buffer)?;
+impl ReadOne for TermiosReader {
+    fn read_one(&mut self) -> Result<u8> {
+        let mut buffer = [0_u8; 1];
+        let fd = 0_i32; // stdin
+        // Fetch the current termios struct, so that we can restore once we're done.
+        let curr_termios = Termios::from_fd(fd)?;
+
+        {
+            // Copy the current termios, set the flags we're interested in, and then apply
+            let mut new_termios = curr_termios;
+            // We're doing two things here:
+            // * disabling canonical mode
+            // * disabling echoing input characters
+            //
+            // Canonical mode is set by default. In canonical mode, the input is made available line
+            // by line, when the line delimiter is inserted. Except for EOL, the line
+            // delimiter is included in the buffer returned by read. We don't want that.
+            // In noncanonical mode, the input is made available immediately.
+            new_termios.c_lflag &= !(ICANON | ECHO);
+            // Set the parameters associated with the terminal from the new_termios struct. The flag
+            // TCSANOW means that changes are effective immediately.
+            tcsetattr(fd, TCSANOW, &new_termios)?;
+            let mut reader = io::stdin();
+            io::stdout().flush()?;
+            reader.read_exact(&mut buffer)?;
+        }
+
+        // Restore stdin with original values of termios struct
+        tcsetattr(fd, TCSANOW, &curr_termios)?;
+
+        Ok(buffer[0])
     }
-
-    // Restore stdin with original values of termios struct
-    tcsetattr(fd, TCSANOW, &curr_termios)?;
-
-    Ok(buffer[0])
 }
 
 #[cfg(test)]
@@ -291,8 +281,9 @@ mod tests {
     #[test]
     fn increment_and_decrement_data_pointer() {
         let program = [b'>', b'<'];
+        let mut reader = &b"hello"[..];
         let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut writer);
+        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer);
         machine.step().expect("valid operation >");
         assert_eq!(1, machine.dp);
         machine.step().expect("valid operation <");
@@ -302,8 +293,9 @@ mod tests {
     #[test]
     fn increment_and_decrement_byte_at_data_pointer() {
         let program = [b'+', b'-'];
+        let mut reader = &b"hello"[..];
         let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut writer);
+        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer);
         machine.step().expect("valid operation +");
         assert_eq!(1, machine.mem[0]);
         machine.step().expect("valid operation -");
@@ -335,8 +327,10 @@ mod tests {
     #[test]
     fn insert_open_bracket_on_stack() {
         let program = [b'[', b'+', b']', b'>'];
+        let mut reader = &b"hello"[..];
         let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut writer).with_mem(vec![1, 2, 3]);
+        let mut machine =
+            AbstractMachine::new(&program, &mut reader, &mut writer).with_mem(vec![1, 2, 3]);
         machine.step().expect("valid operation");
         assert_eq!(machine.stack.last(), Some(&0));
     }
@@ -344,8 +338,9 @@ mod tests {
     #[test]
     fn skip_insert_existing_open_bracket_on_stack() {
         let program = [b'[', b'+', b']', b'>'];
+        let mut reader = &b"hello"[..];
         let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut writer)
+        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer)
             .with_mem(vec![1, 2, 3])
             .with_stack(vec![0]);
         machine.step().expect("valid operation");
@@ -356,8 +351,9 @@ mod tests {
     #[test]
     fn jump_to_instruction_after_matching_open_bracket() {
         let program = [b'[', b'+', b']', b'>'];
+        let mut reader = &b"hello"[..];
         let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut writer)
+        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer)
             .with_mem(vec![1, 2, 3])
             .with_stack(vec![0]);
         machine.ip = 2; // ip points to ']'
