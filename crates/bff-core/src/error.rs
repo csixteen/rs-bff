@@ -14,8 +14,8 @@ pub enum Error {
     EndOfProgram,
     #[error(transparent)]
     Io(#[from] ::std::io::Error),
-    #[error("couldn't acquire the mutex")]
-    Mutex,
+    #[error("could not acquire rw lock")]
+    RwLock,
 }
 
 pub type Result<T, E = Error> = ::std::result::Result<T, E>;

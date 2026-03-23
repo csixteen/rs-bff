@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "bff-core"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.18",
 ]
@@ -116,6 +116,7 @@ name = "bff-tui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bff-core",
  "ratatui",
  "thiserror 2.0.18",
 ]

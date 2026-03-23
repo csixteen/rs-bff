@@ -1,10 +1,13 @@
 [package]
 name = "bff-core"
-version = "0.0.0"
+version = "0.2.0"
 authors = ["Pedro Rodrigues <github.com.urologist223@passmail.net>"]
 edition = "2024"
-description = "A simple Brainfuck interpreter."
+description = "The main abstract machine that interprets Brainfuck programs."
 license = "MIT"
+
+[lints]
+workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -4,6 +4,7 @@ use std::{
     fs,
     io::{self, Read},
     path::PathBuf,
+    sync::{Arc, RwLock},
 };
 
 use bff_core::AbstractMachine;
@@ -25,11 +26,10 @@ struct Args {
 
 fn main() -> anyhow::Result<()> {
     let Args { cells, file } = Args::parse();
-    let program = read_program(file)?;
-    let mut reader = TermiosReader;
-    let mut writer = io::stdout();
-    let mut machine =
-        AbstractMachine::new(&program, &mut reader, &mut writer).with_num_cells(cells);
+    let program: Arc<[u8]> = read_program(file)?.into();
+    let reader = Arc::new(RwLock::new(TermiosReader));
+    let writer = Arc::new(RwLock::new(io::stdout()));
+    let mut machine = AbstractMachine::new(program, reader.clone(), writer).with_num_cells(cells);
 
     if let Err(e) = machine.run() {
         eprintln!("{}", e);

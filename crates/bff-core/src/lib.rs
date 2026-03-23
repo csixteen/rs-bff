@@ -1,11 +1,17 @@
 mod error;
 mod ext;
 
-use std::io;
+use std::{
+    io,
+    sync::{Arc, RwLock},
+};
 
 pub use self::{error::*, ext::*};
 
-pub struct AbstractMachine<'a> {
+pub type Reader = Arc<RwLock<dyn ReadOne>>;
+pub type Writer = Arc<RwLock<dyn io::Write>>;
+
+pub struct AbstractMachine {
     // Data pointer, indicating the current cell being pointed at.
     dp: usize,
     // The one-dimensional tape of memory cells that the Brainfuck program operates.
@@ -13,23 +19,19 @@ pub struct AbstractMachine<'a> {
     // Instruction pointer, which points to the next command to be executed.
     ip: usize,
     // The actual Brainfuck source code that we're running.
-    program: &'a [u8],
+    program: Arc<[u8]>,
     // Stack used to sture the program offsets with the location of opening square brackets
     stack: Vec<usize>,
-    reader: &'a mut dyn ReadOne,
+    reader: Reader,
     // A writer where the output command will write onto.
-    writer: &'a mut dyn io::Write,
+    writer: Writer,
 }
 
-impl<'a> AbstractMachine<'a> {
+impl AbstractMachine {
     pub const DEFAULT_NUM_CELLS: usize = 30_000;
 
-    /// Creates a new Brainfuck abstract machine to run the given program and a writer.
-    pub fn new(
-        program: &'a [u8],
-        reader: &'a mut dyn ReadOne,
-        writer: &'a mut dyn io::Write,
-    ) -> Self {
+    /// Creates a new Brainfuck abstract machine to run the given program, a reader and a writer.
+    pub fn new(program: Arc<[u8]>, reader: Reader, writer: Writer) -> Self {
         Self {
             dp: 0,
             mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],
@@ -161,7 +163,11 @@ impl<'a> AbstractMachine<'a> {
     // accept one byte of input, storing its value in the byte at the data pointer
     #[inline]
     fn execute_in(&mut self) -> Result<InstructionPointer> {
-        let c = self.reader.read_one()?;
+        let c = self
+            .reader
+            .try_write()
+            .map_err(|_| Error::RwLock)?
+            .read_one()?;
         self.write_byte(c)?;
 
         Ok(InstructionPointer::Next)
@@ -171,8 +177,9 @@ impl<'a> AbstractMachine<'a> {
     #[inline]
     fn execute_out(&mut self) -> Result<InstructionPointer> {
         let byte = self.read_byte()?;
-        self.writer.write_all(&[byte])?;
-        self.writer.flush()?;
+        let mut writer = self.writer.try_write().map_err(|_| Error::RwLock)?;
+        writer.write_all(&[byte])?;
+        writer.flush()?;
 
         Ok(InstructionPointer::Next)
     }
@@ -182,7 +189,7 @@ impl<'a> AbstractMachine<'a> {
     // command
     fn execute_openbrk(&mut self) -> Result<InstructionPointer> {
         if self.read_byte()? == 0 {
-            let matching_pos = find_matching(self.ip, self.program)?;
+            let matching_pos = find_matching(self.ip, &self.program)?;
             self.ip = matching_pos + 1;
 
             Ok(InstructionPointer::Jump(matching_pos + 1))
@@ -248,10 +255,10 @@ mod tests {
 
     #[test]
     fn increment_and_decrement_data_pointer() {
-        let program = [b'>', b'<'];
-        let mut reader = &b"hello"[..];
-        let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer);
+        let program = Arc::new([b'>', b'<']);
+        let reader = Arc::new(RwLock::new(&b"hello"[..]));
+        let writer = Arc::new(RwLock::new(Vec::new()));
+        let mut machine = AbstractMachine::new(program, reader.clone(), writer.clone());
         machine.step().expect("valid operation >");
         assert_eq!(1, machine.dp);
         machine.step().expect("valid operation <");
@@ -260,10 +267,10 @@ mod tests {
 
     #[test]
     fn increment_and_decrement_byte_at_data_pointer() {
-        let program = [b'+', b'-'];
-        let mut reader = &b"hello"[..];
-        let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer);
+        let program = Arc::new([b'+', b'-']);
+        let reader = Arc::new(RwLock::new(&b"hello"[..]));
+        let writer = Arc::new(RwLock::new(Vec::new()));
+        let mut machine = AbstractMachine::new(program, reader, writer);
         machine.step().expect("valid operation +");
         assert_eq!(1, machine.mem[0]);
         machine.step().expect("valid operation -");
@@ -294,21 +301,20 @@ mod tests {
 
     #[test]
     fn insert_open_bracket_on_stack() {
-        let program = [b'[', b'+', b']', b'>'];
-        let mut reader = &b"hello"[..];
-        let mut writer = Vec::new();
-        let mut machine =
-            AbstractMachine::new(&program, &mut reader, &mut writer).with_mem(vec![1, 2, 3]);
+        let program = Arc::new([b'[', b'+', b']', b'>']);
+        let reader = Arc::new(RwLock::new(&b"hello"[..]));
+        let writer = Arc::new(RwLock::new(Vec::new()));
+        let mut machine = AbstractMachine::new(program, reader, writer).with_mem(vec![1, 2, 3]);
         machine.step().expect("valid operation");
         assert_eq!(machine.stack.last(), Some(&0));
     }
 
     #[test]
     fn skip_insert_existing_open_bracket_on_stack() {
-        let program = [b'[', b'+', b']', b'>'];
-        let mut reader = &b"hello"[..];
-        let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer)
+        let program = Arc::new([b'[', b'+', b']', b'>']);
+        let reader = Arc::new(RwLock::new(&b"hello"[..]));
+        let writer = Arc::new(RwLock::new(Vec::new()));
+        let mut machine = AbstractMachine::new(program, reader, writer)
             .with_mem(vec![1, 2, 3])
             .with_stack(vec![0]);
         machine.step().expect("valid operation");
@@ -318,10 +324,10 @@ mod tests {
 
     #[test]
     fn jump_to_instruction_after_matching_open_bracket() {
-        let program = [b'[', b'+', b']', b'>'];
-        let mut reader = &b"hello"[..];
-        let mut writer = Vec::new();
-        let mut machine = AbstractMachine::new(&program, &mut reader, &mut writer)
+        let program = Arc::new([b'[', b'+', b']', b'>']);
+        let reader = Arc::new(RwLock::new(&b"hello"[..]));
+        let writer = Arc::new(RwLock::new(Vec::new()));
+        let mut machine = AbstractMachine::new(program, reader, writer)
             .with_mem(vec![1, 2, 3])
             .with_stack(vec![0]);
         machine.ip = 2; // ip points to ']'

@@ -10,5 +10,6 @@ license = "MIT"
 
 [dependencies]
 anyhow.workspace = true
+bff-core.workspace = true
 ratatui.workspace = true
 thiserror.workspace = true
