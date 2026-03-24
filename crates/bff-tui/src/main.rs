@@ -17,7 +17,7 @@ use ratatui::{
 };
 
 use self::{
-    app::{App, CurrentScreen},
+    app::{App, CurrentScreen, EditorMode},
     ui::ui,
 };
 
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // create the app and run it
     let mut app = App::default();
-    let _save_contents = run_app(&mut terminal, &mut app)?;
+    run_app(&mut terminal, &mut app)?;
 
     // restore terminal
     disable_raw_mode()?;
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<bool>
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()>
 where
     io::Error: From<B::Error>,
 {
@@ -66,27 +66,21 @@ where
                         app.editor_mode = Some(Default::default());
                     }
                     KeyCode::Char('q') => app.current_screen = CurrentScreen::Exiting,
-                    KeyCode::Char('r') => {
-                        app.current_screen = CurrentScreen::Running;
-                    }
-                    KeyCode::Tab => {
-                        app.next_screen();
-                    }
+                    KeyCode::Char('r') => app.current_screen = CurrentScreen::Running,
+                    KeyCode::Tab => app.next_screen(),
                     _ => (),
                 },
                 CurrentScreen::Exiting => match key.code {
-                    KeyCode::Tab => {
-                        app.current_screen = app.current_screen.next();
-                    }
-                    KeyCode::Char('y') => return Ok(true),
-                    KeyCode::Char('n') | KeyCode::Char('q') => return Ok(false),
+                    KeyCode::Tab => app.current_screen = app.current_screen.next(),
+                    KeyCode::Esc => app.current_screen = CurrentScreen::Main,
+                    KeyCode::Char('q') => return Ok(()),
                     _ => (),
                 },
                 // In theory, if we're on `Editing` screen, then `editor_mode` should always be
                 // `Some(T)`.
                 CurrentScreen::Editing if let Some(editor_mode) = app.editor_mode => {
                     match editor_mode {
-                        app::EditorMode::Normal => match key.code {
+                        EditorMode::Normal => match key.code {
                             KeyCode::Esc => {
                                 app.current_screen = CurrentScreen::Main;
                                 app.editor_mode = None;
@@ -95,12 +89,10 @@ where
                                 app.current_screen = app.current_screen.next();
                                 app.editor_mode = None;
                             }
-                            KeyCode::Char('i') => {
-                                app.editor_mode = Some(app::EditorMode::Insert);
-                            }
+                            KeyCode::Char('i') => app.editor_mode = Some(app::EditorMode::Insert),
                             _ => (),
                         },
-                        app::EditorMode::Insert => match key.code {
+                        EditorMode::Insert => match key.code {
                             KeyCode::Esc => app.editor_mode = Some(Default::default()),
                             KeyCode::Backspace => {
                                 let _ = app.program.pop();
