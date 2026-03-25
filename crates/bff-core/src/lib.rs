@@ -49,6 +49,11 @@ impl AbstractMachine {
         self
     }
 
+    pub fn with_program(mut self, program: Arc<[u8]>) -> Self {
+        self.program = program;
+        self
+    }
+
     #[cfg(test)]
     fn with_mem(mut self, mem: Vec<u8>) -> Self {
         self.mem = mem;
@@ -217,6 +222,16 @@ impl AbstractMachine {
             Ok(InstructionPointer::Jump(pos + 1))
         }
     }
+
+    pub fn to_debug_info(&self) -> DebugInfo {
+        DebugInfo {
+            data_pointer: self.dp,
+            current_cell: self.mem[self.dp],
+            instruction_pointer: self.ip,
+            current_instruction: self.program[self.ip],
+            top_of_stack: self.stack.last().copied(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -247,6 +262,15 @@ fn find_matching(pos: usize, program: &[u8]) -> Result<usize> {
     }
 
     Err(Error::NoMatchingBracket(pos))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DebugInfo {
+    pub data_pointer: usize,
+    pub current_cell: u8,
+    pub instruction_pointer: usize,
+    pub current_instruction: u8,
+    pub top_of_stack: Option<usize>,
 }
 
 #[cfg(test)]

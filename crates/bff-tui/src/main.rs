@@ -1,9 +1,14 @@
 #![feature(if_let_guard)]
+#![feature(type_changing_struct_update)]
 
 mod app;
+mod error;
 mod ui;
 
-use std::{error::Error, io};
+use std::{
+    io,
+    sync::{Arc, RwLock},
+};
 
 use ratatui::{
     Terminal,
@@ -17,11 +22,12 @@ use ratatui::{
 };
 
 use self::{
-    app::{App, CurrentScreen, EditorMode},
+    app::{App, CurrentScreen, EditingMode, RunningMode},
+    error::{Error, Result},
     ui::ui,
 };
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     // setup terminal
     enable_raw_mode()?;
     let mut stderr = io::stderr();
@@ -31,8 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create the app and run it
-    let mut app = App::default();
-    run_app(&mut terminal, &mut app)?;
+    run(&mut terminal)?;
 
     // restore terminal
     disable_raw_mode()?;
@@ -46,12 +51,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()>
+fn run<B: Backend>(terminal: &mut Terminal<B>) -> Result<()>
 where
-    io::Error: From<B::Error>,
+    Error: From<B::Error>,
 {
+    let input = Arc::new(RwLock::new(String::new()));
+    let output = Arc::new(RwLock::new(String::new()));
+
+    let mut app = App::new(Arc::clone(&input), Arc::clone(&output));
+
     loop {
-        terminal.draw(|f| ui(f, app))?;
+        terminal.draw(|f| ui(f, &app))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind == event::KeyEventKind::Release {
@@ -59,57 +69,41 @@ where
                 continue;
             }
 
-            match app.current_screen {
+            match app.current_screen() {
                 CurrentScreen::Main => match key.code {
-                    KeyCode::Char('e') => {
-                        app.current_screen = CurrentScreen::Editing;
-                        app.editor_mode = Some(Default::default());
-                    }
-                    KeyCode::Char('q') => app.current_screen = CurrentScreen::Exiting,
-                    KeyCode::Char('r') => app.current_screen = CurrentScreen::Running,
-                    KeyCode::Tab => app.next_screen(),
+                    KeyCode::Char('e') => app = app.into_editing_mode(Default::default()),
+                    KeyCode::Char('r') => app = app.into_running_mode(Default::default()),
+                    KeyCode::Char('q') => app = app.with_current_screen(CurrentScreen::Exiting),
+                    _ => (),
+                },
+                CurrentScreen::Editing => match app.editing_mode() {
+                    EditingMode::Normal => match key.code {
+                        KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
+                        KeyCode::Char('i') => app = app.into_editing_mode(EditingMode::Insert),
+                        KeyCode::Char('q') => app = app.with_current_screen(CurrentScreen::Exiting),
+                        _ => (),
+                    },
+                    EditingMode::Insert => match key.code {
+                        KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
+                        KeyCode::Char(value) => app.push_char(value)?,
+                        KeyCode::Backspace => {
+                            let _ = app.pop_char()?;
+                        }
+                        _ => (),
+                    },
+                },
+                CurrentScreen::Running => match key.code {
+                    KeyCode::Enter => app.run_program()?,
+                    KeyCode::Char('o') => app = app.into_running_mode(RunningMode::OneShot),
+                    KeyCode::Char('s') => app = app.into_running_mode(RunningMode::StepByStep),
+                    KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
                     _ => (),
                 },
                 CurrentScreen::Exiting => match key.code {
-                    KeyCode::Tab => app.current_screen = app.current_screen.next(),
-                    KeyCode::Esc => app.current_screen = CurrentScreen::Main,
                     KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
                     _ => (),
                 },
-                // In theory, if we're on `Editing` screen, then `editor_mode` should always be
-                // `Some(T)`.
-                CurrentScreen::Editing if let Some(editor_mode) = app.editor_mode => {
-                    match editor_mode {
-                        EditorMode::Normal => match key.code {
-                            KeyCode::Esc => {
-                                app.current_screen = CurrentScreen::Main;
-                                app.editor_mode = None;
-                            }
-                            KeyCode::Tab => {
-                                app.current_screen = app.current_screen.next();
-                                app.editor_mode = None;
-                            }
-                            KeyCode::Char('i') => app.editor_mode = Some(app::EditorMode::Insert),
-                            _ => (),
-                        },
-                        EditorMode::Insert => match key.code {
-                            KeyCode::Esc => app.editor_mode = Some(Default::default()),
-                            KeyCode::Backspace => {
-                                let _ = app.program.pop();
-                            }
-                            KeyCode::Char(value) => app.program.push(value),
-                            _ => (),
-                        },
-                    }
-                }
-                CurrentScreen::Running => {
-                    if let Some(_running_mode) = app.running_mode {
-                        todo!()
-                    } else {
-                        todo!()
-                    }
-                }
-                _ => (),
             }
         }
     }
