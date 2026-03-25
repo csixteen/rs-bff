@@ -1,20 +1,24 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
-use bff_core::AbstractMachine;
+use bff_core::{AbstractMachine, ReadOne};
 
 use crate::error::{Error, Result};
 
-pub struct App {
-    input: Arc<RwLock<String>>,
-    output: Arc<RwLock<String>>,
+pub struct App<'a> {
+    input: Arc<RwLock<Vec<u8>>>,
+    output: Arc<RwLock<Vec<u8>>>,
     current_screen: CurrentScreen,
     editing_mode: EditingMode,
     running_mode: RunningMode,
-    machine: Option<Arc<RwLock<AbstractMachine>>>,
+    machine: Option<Rc<RefCell<AbstractMachine<'a>>>>,
 }
 
-impl App {
-    pub fn new(input: Arc<RwLock<String>>, output: Arc<RwLock<String>>) -> Self {
+impl<'a> App<'a> {
+    pub fn new(input: Arc<RwLock<Vec<u8>>>, output: Arc<RwLock<Vec<u8>>>) -> Self {
         Self {
             input,
             output,
@@ -28,9 +32,11 @@ impl App {
     pub fn run_program(&self) -> Result<()> {
         if let Some(machine) = &self.machine {
             match self.running_mode {
-                RunningMode::StepByStep => machine.try_write()?.step()?,
-                RunningMode::OneShot => machine.try_write()?.run()?,
+                RunningMode::StepByStep => machine.borrow_mut().step()?,
+                RunningMode::OneShot => machine.borrow_mut().run()?,
             }
+
+            return Ok(());
         }
 
         Err(Error::AbstractMachineMissing)
@@ -51,12 +57,26 @@ impl App {
         }
     }
 
-    pub fn into_running_mode(self, running_mode: RunningMode) -> Self {
-        Self {
+    pub fn into_running_mode(self, running_mode: RunningMode) -> Result<Self> {
+        let machine = Some(match self.machine {
+            Some(m) => m,
+            None => {
+                let program: Arc<[u8]> = self.input.try_read()?.as_slice().into();
+                let reader = Arc::new(RwLock::new(FakeReader));
+                Rc::new(RefCell::new(AbstractMachine::new(
+                    program,
+                    reader,
+                    self.output.clone(),
+                )))
+            }
+        });
+
+        Ok(Self {
             current_screen: CurrentScreen::Running,
             running_mode,
+            machine,
             ..self
-        }
+        })
     }
 
     pub fn current_screen(&self) -> CurrentScreen {
@@ -71,18 +91,18 @@ impl App {
         self.running_mode
     }
 
-    pub fn input(&self) -> Result<String> {
+    pub fn input(&self) -> Result<Vec<u8>> {
         Ok(self.input.try_read()?.to_owned())
     }
 
     pub fn push_char(&self, c: char) -> Result<()> {
-        self.input.try_write()?.push(c);
+        self.input.try_write()?.push(c as u8);
 
         Ok(())
     }
 
     pub fn pop_char(&self) -> Result<Option<char>> {
-        Ok(self.input.try_write()?.pop())
+        Ok(self.input.try_write()?.pop().map(char::from))
     }
 }
 
@@ -107,4 +127,12 @@ pub enum RunningMode {
     StepByStep,
     #[default]
     OneShot,
+}
+
+struct FakeReader;
+
+impl ReadOne for FakeReader {
+    fn read_one(&mut self) -> bff_core::Result<u8> {
+        todo!()
+    }
 }

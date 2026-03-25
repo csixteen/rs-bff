@@ -9,6 +9,9 @@ pub enum Error {
     BffCore(#[from] bff_core::Error),
 
     #[error(transparent)]
+    FromUtf8(#[from] ::std::string::FromUtf8Error),
+
+    #[error(transparent)]
     Io(#[from] ::std::io::Error),
 
     #[error("couldn't acquire lock")]

@@ -8,10 +8,10 @@ use std::{
 
 pub use self::{error::*, ext::*};
 
-pub type Reader = Arc<RwLock<dyn ReadOne>>;
-pub type Writer = Arc<RwLock<dyn io::Write>>;
+pub type Reader<'a> = Arc<RwLock<dyn ReadOne + 'a>>;
+pub type Writer<'a> = Arc<RwLock<dyn io::Write + 'a>>;
 
-pub struct AbstractMachine {
+pub struct AbstractMachine<'a> {
     // Data pointer, indicating the current cell being pointed at.
     dp: usize,
     // The one-dimensional tape of memory cells that the Brainfuck program operates.
@@ -22,16 +22,16 @@ pub struct AbstractMachine {
     program: Arc<[u8]>,
     // Stack used to sture the program offsets with the location of opening square brackets
     stack: Vec<usize>,
-    reader: Reader,
+    reader: Reader<'a>,
     // A writer where the output command will write onto.
-    writer: Writer,
+    writer: Writer<'a>,
 }
 
-impl AbstractMachine {
+impl<'a> AbstractMachine<'a> {
     pub const DEFAULT_NUM_CELLS: usize = 30_000;
 
     /// Creates a new Brainfuck abstract machine to run the given program, a reader and a writer.
-    pub fn new(program: Arc<[u8]>, reader: Reader, writer: Writer) -> Self {
+    pub fn new(program: Arc<[u8]>, reader: Reader<'a>, writer: Writer<'a>) -> Self {
         Self {
             dp: 0,
             mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],

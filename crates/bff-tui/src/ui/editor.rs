@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use ratatui::{
     Frame,
     layout::Rect,
@@ -8,18 +6,14 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use crate::app::App;
+use crate::{Result, app::App};
 
-pub fn render<'a>(
-    frame: &'a mut Frame,
-    rect: Rect,
-    app: &'a App,
-) -> Result<(), Box<dyn Error + 'a>> {
+pub fn render<'a>(frame: &'a mut Frame, rect: Rect, app: &'a App) -> Result<()> {
     let input_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default());
     let input = Paragraph::new(Text::styled(
-        app.input()?,
+        String::from_utf8(app.input()?)?,
         Style::default().fg(Color::White),
     ))
     .block(input_block);

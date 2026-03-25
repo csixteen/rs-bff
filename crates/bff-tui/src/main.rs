@@ -55,9 +55,8 @@ fn run<B: Backend>(terminal: &mut Terminal<B>) -> Result<()>
 where
     Error: From<B::Error>,
 {
-    let input = Arc::new(RwLock::new(String::new()));
-    let output = Arc::new(RwLock::new(String::new()));
-
+    let input = Arc::new(RwLock::new(Vec::new()));
+    let output = Arc::new(RwLock::new(Vec::new()));
     let mut app = App::new(Arc::clone(&input), Arc::clone(&output));
 
     loop {
@@ -72,7 +71,7 @@ where
             match app.current_screen() {
                 CurrentScreen::Main => match key.code {
                     KeyCode::Char('e') => app = app.into_editing_mode(Default::default()),
-                    KeyCode::Char('r') => app = app.into_running_mode(Default::default()),
+                    KeyCode::Char('r') => app = app.into_running_mode(Default::default())?,
                     KeyCode::Char('q') => app = app.with_current_screen(CurrentScreen::Exiting),
                     _ => (),
                 },
@@ -94,8 +93,8 @@ where
                 },
                 CurrentScreen::Running => match key.code {
                     KeyCode::Enter => app.run_program()?,
-                    KeyCode::Char('o') => app = app.into_running_mode(RunningMode::OneShot),
-                    KeyCode::Char('s') => app = app.into_running_mode(RunningMode::StepByStep),
+                    KeyCode::Char('o') => app = app.into_running_mode(RunningMode::OneShot)?,
+                    KeyCode::Char('s') => app = app.into_running_mode(RunningMode::StepByStep)?,
                     KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
                     _ => (),
                 },
