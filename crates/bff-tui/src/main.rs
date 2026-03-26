@@ -1,6 +1,3 @@
-#![feature(if_let_guard)]
-#![feature(type_changing_struct_update)]
-
 mod app;
 mod error;
 mod ui;
@@ -84,9 +81,9 @@ where
                     },
                     EditingMode::Insert => match key.code {
                         KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
-                        KeyCode::Char(value) => app.push_char(value)?,
+                        KeyCode::Char(value) => app = app.push_char(value)?,
                         KeyCode::Backspace => {
-                            let _ = app.pop_char()?;
+                            app = app.pop_char()?;
                         }
                         _ => (),
                     },

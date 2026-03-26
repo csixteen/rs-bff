@@ -11,6 +11,7 @@ use crate::error::{Error, Result};
 pub struct App<'a> {
     input: Arc<RwLock<Vec<u8>>>,
     output: Arc<RwLock<Vec<u8>>>,
+    cursor_index: usize,
     current_screen: CurrentScreen,
     editing_mode: EditingMode,
     running_mode: RunningMode,
@@ -22,6 +23,7 @@ impl<'a> App<'a> {
         Self {
             input,
             output,
+            cursor_index: 0,
             current_screen: Default::default(),
             editing_mode: Default::default(),
             running_mode: Default::default(),
@@ -91,18 +93,30 @@ impl<'a> App<'a> {
         self.running_mode
     }
 
+    pub fn cursor_index(&self) -> usize {
+        self.cursor_index
+    }
+
     pub fn input(&self) -> Result<Vec<u8>> {
         Ok(self.input.try_read()?.to_owned())
     }
 
-    pub fn push_char(&self, c: char) -> Result<()> {
+    pub fn push_char(self, c: char) -> Result<Self> {
         self.input.try_write()?.push(c as u8);
 
-        Ok(())
+        Ok(Self {
+            cursor_index: self.cursor_index.saturating_add(1),
+            ..self
+        })
     }
 
-    pub fn pop_char(&self) -> Result<Option<char>> {
-        Ok(self.input.try_write()?.pop().map(char::from))
+    pub fn pop_char(self) -> Result<Self> {
+        let _ = self.input.try_write()?.pop();
+
+        Ok(Self {
+            cursor_index: self.cursor_index.saturating_sub(1),
+            ..self
+        })
     }
 }
 

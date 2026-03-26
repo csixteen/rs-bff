@@ -1,5 +1,5 @@
-mod editor;
 mod footer;
+mod middle;
 mod title;
 
 use ratatui::{
@@ -21,7 +21,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
         .split(frame.area());
 
     self::title::render(frame, chunks[0]);
-    if let Err(e) = self::editor::render(frame, chunks[1], app) {
+    if let Err(e) = self::middle::render(frame, chunks[1], app) {
         eprintln!("{}", e);
     }
     self::footer::render(frame, chunks[2], app);
