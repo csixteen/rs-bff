@@ -29,7 +29,7 @@ fn main() -> anyhow::Result<()> {
     let program: Arc<[u8]> = read_program(file)?.into();
     let reader = Arc::new(RwLock::new(TermiosReader));
     let writer = Arc::new(RwLock::new(io::stdout()));
-    let mut machine = AbstractMachine::new(program, reader.clone(), writer).with_num_cells(cells);
+    let mut machine = AbstractMachine::new(program, reader, writer).with_num_cells(cells);
 
     if let Err(e) = machine.run() {
         eprintln!("{}", e);
