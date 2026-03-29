@@ -1,6 +1,7 @@
 mod app;
 mod error;
 mod ui;
+mod util;
 
 use std::{
     io,

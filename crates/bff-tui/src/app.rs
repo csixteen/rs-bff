@@ -5,6 +5,7 @@ use std::{
 };
 
 use bff_core::{AbstractMachine, ReadOne};
+use ratatui::text::Line;
 
 use crate::error::{Error, Result};
 
@@ -81,24 +82,43 @@ impl<'a> App<'a> {
         })
     }
 
+    #[inline]
     pub fn current_screen(&self) -> CurrentScreen {
         self.current_screen
     }
 
+    #[inline]
     pub fn editing_mode(&self) -> EditingMode {
         self.editing_mode
     }
 
+    #[inline]
     pub fn running_mode(&self) -> RunningMode {
         self.running_mode
     }
 
+    #[inline]
     pub fn cursor_index(&self) -> usize {
         self.cursor_index
     }
 
+    #[inline]
     pub fn input(&self) -> Result<Vec<u8>> {
         Ok(self.input.try_read()?.to_owned())
+    }
+
+    #[inline]
+    pub fn input_to_lines(&self, line_width: usize) -> Result<Vec<Line<'_>>> {
+        let mut lines = Vec::new();
+
+        for chunk in self.input()?.chunks(line_width) {
+            for parts in chunk.split(|&b| b == b'\n') {
+                let s = String::from_utf8_lossy(parts).into_owned();
+                lines.push(Line::from(s));
+            }
+        }
+
+        Ok(lines)
     }
 
     pub fn push_char(self, c: char) -> Result<Self> {
