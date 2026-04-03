@@ -11,6 +11,7 @@ pub use self::{error::*, ext::*};
 pub type Reader<'a> = Arc<RwLock<dyn ReadOne + 'a>>;
 pub type Writer<'a> = Arc<RwLock<dyn io::Write + 'a>>;
 
+#[cfg(feature = "thread-safe")]
 pub struct AbstractMachine<'a> {
     // Data pointer, indicating the current cell being pointed at.
     dp: usize,
@@ -27,6 +28,40 @@ pub struct AbstractMachine<'a> {
     writer: Writer<'a>,
 }
 
+#[cfg(not(feature = "thread-safe"))]
+pub struct AbstractMachine<'a> {
+    dp: usize,
+    mem: Vec<u8>,
+    ip: usize,
+    program: Arc<[u8]>,
+    stack: Vec<usize>,
+    reader: &'a mut dyn ReadOne,
+    writer: &'a mut dyn io::Write,
+}
+
+#[cfg(not(feature = "thread-safe"))]
+impl<'a> AbstractMachine<'a> {
+    pub const DEFAULT_NUM_CELLS: usize = 30_000;
+
+    /// Creates a new Brainfuck abstract machine to run the given program, a reader and a writer.
+    pub fn new(
+        program: Arc<[u8]>,
+        reader: &'a mut dyn ReadOne,
+        writer: &'a mut dyn io::Write,
+    ) -> Self {
+        Self {
+            dp: 0,
+            mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],
+            ip: 0,
+            program,
+            stack: Vec::new(),
+            reader,
+            writer,
+        }
+    }
+}
+
+#[cfg(feature = "thread-safe")]
 impl<'a> AbstractMachine<'a> {
     pub const DEFAULT_NUM_CELLS: usize = 30_000;
 
@@ -42,7 +77,9 @@ impl<'a> AbstractMachine<'a> {
             writer,
         }
     }
+}
 
+impl<'a> AbstractMachine<'a> {
     /// Given an abstract machine, it initializes its memory with [`num_cells`] set to zero.
     pub fn with_num_cells(mut self, num_cells: usize) -> Self {
         self.mem = vec![0_u8; num_cells];
@@ -165,6 +202,17 @@ impl<'a> AbstractMachine<'a> {
         Ok(InstructionPointer::Next)
     }
 
+    #[cfg(not(feature = "thread-safe"))]
+    // accept one byte of input, storing its value in the byte at the data pointer
+    #[inline]
+    fn execute_in(&mut self) -> Result<InstructionPointer> {
+        let c = self.reader.read_one()?;
+        self.write_byte(c)?;
+
+        Ok(InstructionPointer::Next)
+    }
+
+    #[cfg(feature = "thread-safe")]
     // accept one byte of input, storing its value in the byte at the data pointer
     #[inline]
     fn execute_in(&mut self) -> Result<InstructionPointer> {
@@ -178,6 +226,18 @@ impl<'a> AbstractMachine<'a> {
         Ok(InstructionPointer::Next)
     }
 
+    #[cfg(not(feature = "thread-safe"))]
+    // output the byte at the data pointer
+    #[inline]
+    fn execute_out(&mut self) -> Result<InstructionPointer> {
+        let byte = self.read_byte()?;
+        self.writer.write_all(&[byte])?;
+        self.writer.flush()?;
+
+        Ok(InstructionPointer::Next)
+    }
+
+    #[cfg(feature = "thread-safe")]
     // output the byte at the data pointer
     #[inline]
     fn execute_out(&mut self) -> Result<InstructionPointer> {
@@ -277,28 +337,48 @@ pub struct DebugInfo {
 mod tests {
     use super::*;
 
+    macro_rules! build_and_test {
+        ($program:expr, $machine:ident, $body:tt) => {
+            #[cfg(feature = "thread-safe")]
+            {
+                let reader = Arc::new(RwLock::new(&b"hello"[..]));
+                let writer = Arc::new(RwLock::new(Vec::new()));
+                let mut $machine = AbstractMachine::new($program, reader, writer);
+
+                $body
+            }
+
+            #[cfg(not(feature = "thread-safe"))]
+            {
+                let mut reader = &b"hello"[..];
+                let mut writer = Vec::new();
+                let mut $machine = AbstractMachine::new($program, &mut reader, &mut writer);
+
+                $body
+            }
+        };
+    }
+
     #[test]
     fn increment_and_decrement_data_pointer() {
         let program = Arc::new([b'>', b'<']);
-        let reader = Arc::new(RwLock::new(&b"hello"[..]));
-        let writer = Arc::new(RwLock::new(Vec::new()));
-        let mut machine = AbstractMachine::new(program, reader.clone(), writer.clone());
-        machine.step().expect("valid operation >");
-        assert_eq!(1, machine.dp);
-        machine.step().expect("valid operation <");
-        assert_eq!(0, machine.dp);
+        build_and_test!(program, machine, {
+            machine.step().expect("valid operation >");
+            assert_eq!(1, machine.dp);
+            machine.step().expect("valid operation <");
+            assert_eq!(0, machine.dp);
+        });
     }
 
     #[test]
     fn increment_and_decrement_byte_at_data_pointer() {
         let program = Arc::new([b'+', b'-']);
-        let reader = Arc::new(RwLock::new(&b"hello"[..]));
-        let writer = Arc::new(RwLock::new(Vec::new()));
-        let mut machine = AbstractMachine::new(program, reader, writer);
-        machine.step().expect("valid operation +");
-        assert_eq!(1, machine.mem[0]);
-        machine.step().expect("valid operation -");
-        assert_eq!(0, machine.mem[0]);
+        build_and_test!(program, machine, {
+            machine.step().expect("valid operation +");
+            assert_eq!(1, machine.mem[0]);
+            machine.step().expect("valid operation -");
+            assert_eq!(0, machine.mem[0]);
+        });
     }
 
     #[test]
@@ -326,37 +406,33 @@ mod tests {
     #[test]
     fn insert_open_bracket_on_stack() {
         let program = Arc::new([b'[', b'+', b']', b'>']);
-        let reader = Arc::new(RwLock::new(&b"hello"[..]));
-        let writer = Arc::new(RwLock::new(Vec::new()));
-        let mut machine = AbstractMachine::new(program, reader, writer).with_mem(vec![1, 2, 3]);
-        machine.step().expect("valid operation");
-        assert_eq!(machine.stack.last(), Some(&0));
+        build_and_test!(program, machine, {
+            machine = machine.with_mem(vec![1, 2, 3]);
+            machine.step().expect("valid operation");
+            assert_eq!(machine.stack.last(), Some(&0));
+        });
     }
 
     #[test]
     fn skip_insert_existing_open_bracket_on_stack() {
         let program = Arc::new([b'[', b'+', b']', b'>']);
-        let reader = Arc::new(RwLock::new(&b"hello"[..]));
-        let writer = Arc::new(RwLock::new(Vec::new()));
-        let mut machine = AbstractMachine::new(program, reader, writer)
-            .with_mem(vec![1, 2, 3])
-            .with_stack(vec![0]);
-        machine.step().expect("valid operation");
-        assert_eq!(machine.stack.last(), Some(&0));
-        assert_eq!(1, machine.stack.len());
+        build_and_test!(program, machine, {
+            machine = machine.with_mem(vec![1, 2, 3]).with_stack(vec![0]);
+            machine.step().expect("valid operation");
+            assert_eq!(machine.stack.last(), Some(&0));
+            assert_eq!(1, machine.stack.len());
+        });
     }
 
     #[test]
     fn jump_to_instruction_after_matching_open_bracket() {
         let program = Arc::new([b'[', b'+', b']', b'>']);
-        let reader = Arc::new(RwLock::new(&b"hello"[..]));
-        let writer = Arc::new(RwLock::new(Vec::new()));
-        let mut machine = AbstractMachine::new(program, reader, writer)
-            .with_mem(vec![1, 2, 3])
-            .with_stack(vec![0]);
-        machine.ip = 2; // ip points to ']'
-        machine.step().expect("valid operation");
-        // instruction pointer points at the instruction after '['
-        assert_eq!(1, machine.ip);
+        build_and_test!(program, machine, {
+            machine = machine.with_mem(vec![1, 2, 3]).with_stack(vec![0]);
+            machine.ip = 2; // ip points to ']'
+            machine.step().expect("valid operation");
+            // instruction pointer points at the instruction after '['
+            assert_eq!(1, machine.ip);
+        });
     }
 }
