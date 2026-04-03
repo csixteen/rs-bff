@@ -5,16 +5,18 @@ use std::{
 };
 
 use bff_core::{AbstractMachine, ReadOne};
-use ratatui::text::Line;
+use ratatui::{text::Line, widgets::ScrollbarState};
 
 use crate::error::{Error, Result};
 
 pub struct App<'a> {
     input: Arc<RwLock<Vec<u8>>>,
     output: Arc<RwLock<Vec<u8>>>,
-    cursor_index: usize,
+    horizontal_scroll: usize,
+    horizontal_scroll_state: ScrollbarState,
+    vertical_scroll: usize,
+    vertical_scroll_state: ScrollbarState,
     current_screen: CurrentScreen,
-    editing_mode: EditingMode,
     running_mode: RunningMode,
     machine: Option<Rc<RefCell<AbstractMachine<'a>>>>,
 }
@@ -24,9 +26,11 @@ impl<'a> App<'a> {
         Self {
             input,
             output,
-            cursor_index: 0,
+            horizontal_scroll: 0,
+            horizontal_scroll_state: Default::default(),
+            vertical_scroll: 0,
+            vertical_scroll_state: Default::default(),
             current_screen: Default::default(),
-            editing_mode: Default::default(),
             running_mode: Default::default(),
             machine: None,
         }
@@ -48,14 +52,6 @@ impl<'a> App<'a> {
     pub fn with_current_screen(self, current_screen: CurrentScreen) -> Self {
         Self {
             current_screen,
-            ..self
-        }
-    }
-
-    pub fn into_editing_mode(self, editing_mode: EditingMode) -> Self {
-        Self {
-            current_screen: CurrentScreen::Editing,
-            editing_mode,
             ..self
         }
     }
@@ -88,18 +84,52 @@ impl<'a> App<'a> {
     }
 
     #[inline]
-    pub fn editing_mode(&self) -> EditingMode {
-        self.editing_mode
-    }
-
-    #[inline]
     pub fn running_mode(&self) -> RunningMode {
         self.running_mode
     }
 
     #[inline]
-    pub fn cursor_index(&self) -> usize {
-        self.cursor_index
+    pub fn scroll_down(self) -> Self {
+        let vertical_scroll = self.vertical_scroll.saturating_add(1);
+
+        Self {
+            vertical_scroll,
+            vertical_scroll_state: self.vertical_scroll_state.position(vertical_scroll),
+            ..self
+        }
+    }
+
+    #[inline]
+    pub fn scroll_up(self) -> Self {
+        let vertical_scroll = self.vertical_scroll.saturating_sub(1);
+
+        Self {
+            vertical_scroll,
+            vertical_scroll_state: self.vertical_scroll_state.position(vertical_scroll),
+            ..self
+        }
+    }
+
+    #[inline]
+    pub fn scroll_left(self) -> Self {
+        let horizontal_scroll = self.horizontal_scroll.saturating_sub(1);
+
+        Self {
+            horizontal_scroll,
+            horizontal_scroll_state: self.horizontal_scroll_state.position(horizontal_scroll),
+            ..self
+        }
+    }
+
+    #[inline]
+    pub fn scroll_right(self) -> Self {
+        let horizontal_scroll = self.horizontal_scroll.saturating_add(1);
+
+        Self {
+            horizontal_scroll,
+            horizontal_scroll_state: self.horizontal_scroll_state.position(horizontal_scroll),
+            ..self
+        }
     }
 
     #[inline]
@@ -120,40 +150,14 @@ impl<'a> App<'a> {
 
         Ok(lines)
     }
-
-    pub fn push_char(self, c: char) -> Result<Self> {
-        self.input.try_write()?.push(c as u8);
-
-        Ok(Self {
-            cursor_index: self.cursor_index.saturating_add(1),
-            ..self
-        })
-    }
-
-    pub fn pop_char(self) -> Result<Self> {
-        let _ = self.input.try_write()?.pop();
-
-        Ok(Self {
-            cursor_index: self.cursor_index.saturating_sub(1),
-            ..self
-        })
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CurrentScreen {
     #[default]
     Main,
-    Editing,
     Running,
     Exiting,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum EditingMode {
-    #[default]
-    Normal,
-    Insert,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

@@ -1,7 +1,6 @@
 mod app;
 mod error;
 mod ui;
-mod util;
 
 use std::{
     io,
@@ -20,7 +19,7 @@ use ratatui::{
 };
 
 use self::{
-    app::{App, CurrentScreen, EditingMode, RunningMode},
+    app::{App, CurrentScreen, RunningMode},
     error::{Error, Result},
     ui::ui,
 };
@@ -68,26 +67,14 @@ where
 
             match app.current_screen() {
                 CurrentScreen::Main => match key.code {
-                    KeyCode::Char('e') => app = app.into_editing_mode(Default::default()),
                     KeyCode::Char('r') => app = app.into_running_mode(Default::default())?,
                     KeyCode::Char('q') => app = app.with_current_screen(CurrentScreen::Exiting),
+                    // scrolling keys
+                    KeyCode::Char('h') => app = app.scroll_left(),
+                    KeyCode::Char('j') => app = app.scroll_down(),
+                    KeyCode::Char('k') => app = app.scroll_up(),
+                    KeyCode::Char('l') => app = app.scroll_right(),
                     _ => (),
-                },
-                CurrentScreen::Editing => match app.editing_mode() {
-                    EditingMode::Normal => match key.code {
-                        KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
-                        KeyCode::Char('i') => app = app.into_editing_mode(EditingMode::Insert),
-                        KeyCode::Char('q') => app = app.with_current_screen(CurrentScreen::Exiting),
-                        _ => (),
-                    },
-                    EditingMode::Insert => match key.code {
-                        KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
-                        KeyCode::Char(value) => app = app.push_char(value)?,
-                        KeyCode::Backspace => {
-                            app = app.pop_char()?;
-                        }
-                        _ => (),
-                    },
                 },
                 CurrentScreen::Running => match key.code {
                     KeyCode::Enter => app.run_program()?,

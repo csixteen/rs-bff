@@ -10,6 +10,6 @@ license = "MIT"
 
 [dependencies]
 anyhow.workspace = true
-bff-core.workspace = true
+bff-core = { workspace = true, features = ["thread-safe"] }
 ratatui.workspace = true
 thiserror.workspace = true
