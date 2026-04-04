@@ -66,7 +66,7 @@ impl<'a> App<'a> {
                     program,
                     reader,
                     self.output.clone(),
-                )))
+                )?))
             }
         });
 

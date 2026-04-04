@@ -2,6 +2,7 @@ mod error;
 mod ext;
 
 use std::{
+    collections::HashMap,
     io,
     sync::{Arc, RwLock},
 };
@@ -21,11 +22,11 @@ pub struct AbstractMachine<'a> {
     ip: usize,
     // The actual Brainfuck source code that we're running.
     program: Arc<[u8]>,
-    // Stack used to sture the program offsets with the location of opening square brackets
-    stack: Vec<usize>,
+    // A reader where the input command will read from.
     reader: Reader<'a>,
     // A writer where the output command will write onto.
     writer: Writer<'a>,
+    brackets: HashMap<usize, usize>,
 }
 
 #[cfg(not(feature = "thread-safe"))]
@@ -34,9 +35,9 @@ pub struct AbstractMachine<'a> {
     mem: Vec<u8>,
     ip: usize,
     program: Arc<[u8]>,
-    stack: Vec<usize>,
     reader: &'a mut dyn ReadOne,
     writer: &'a mut dyn io::Write,
+    brackets: HashMap<usize, usize>,
 }
 
 #[cfg(not(feature = "thread-safe"))]
@@ -48,16 +49,18 @@ impl<'a> AbstractMachine<'a> {
         program: Arc<[u8]>,
         reader: &'a mut dyn ReadOne,
         writer: &'a mut dyn io::Write,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let brackets = build_bracket_mapping(&program)?;
+
+        Ok(Self {
             dp: 0,
             mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],
             ip: 0,
             program,
-            stack: Vec::new(),
             reader,
             writer,
-        }
+            brackets,
+        })
     }
 }
 
@@ -66,16 +69,18 @@ impl<'a> AbstractMachine<'a> {
     pub const DEFAULT_NUM_CELLS: usize = 30_000;
 
     /// Creates a new Brainfuck abstract machine to run the given program, a reader and a writer.
-    pub fn new(program: Arc<[u8]>, reader: Reader<'a>, writer: Writer<'a>) -> Self {
-        Self {
+    pub fn new(program: Arc<[u8]>, reader: Reader<'a>, writer: Writer<'a>) -> Result<Self> {
+        let brackets = build_bracket_mapping(&program)?;
+
+        Ok(Self {
             dp: 0,
             mem: vec![0_u8; Self::DEFAULT_NUM_CELLS],
             ip: 0,
             program,
-            stack: Vec::new(),
             reader,
             writer,
-        }
+            brackets,
+        })
     }
 }
 
@@ -94,12 +99,6 @@ impl<'a> AbstractMachine<'a> {
     #[cfg(test)]
     fn with_mem(mut self, mem: Vec<u8>) -> Self {
         self.mem = mem;
-        self
-    }
-
-    #[cfg(test)]
-    fn with_stack(mut self, stack: Vec<usize>) -> Self {
-        self.stack = stack;
         self
     }
 
@@ -124,22 +123,29 @@ impl<'a> AbstractMachine<'a> {
             return Err(Error::EndOfProgram);
         };
 
-        let ip = match command {
+        match command {
             b'>' => self.execute_shr()?,
             b'<' => self.execute_shl()?,
             b'+' => self.execute_inc()?,
             b'-' => self.execute_dec()?,
             b'.' => self.execute_out()?,
             b',' => self.execute_in()?,
-            b'[' => self.execute_openbrk()?,
-            b']' => self.execute_closebrk()?,
-            _ => InstructionPointer::Next,
+            b'[' if self.read_byte()? == 0 => {
+                self.ip = *self
+                    .brackets
+                    .get(&self.ip)
+                    .ok_or(Error::NoMatchingBracket(self.ip))?;
+            }
+            b']' if (self.read_byte()? != 0) => {
+                self.ip = *self
+                    .brackets
+                    .get(&self.ip)
+                    .ok_or(Error::NoMatchingBracket(self.ip))?;
+            }
+            _ => (),
         };
 
-        self.ip = match ip {
-            InstructionPointer::Next => self.ip + 1,
-            InstructionPointer::Jump(addr) => addr,
-        };
+        self.ip += 1;
 
         Ok(())
     }
@@ -162,60 +168,60 @@ impl<'a> AbstractMachine<'a> {
 
     // increment the data pointer by one (move right)
     #[inline]
-    fn execute_shr(&mut self) -> Result<InstructionPointer> {
+    fn execute_shr(&mut self) -> Result<()> {
         let (value, overflow) = self.dp.overflowing_add(1);
         if overflow {
             return Err(Error::DataPointerOutOfBounds);
         }
         self.dp = value;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     // decrement the data pointer by one (move left)
     #[inline]
-    fn execute_shl(&mut self) -> Result<InstructionPointer> {
+    fn execute_shl(&mut self) -> Result<()> {
         let (value, overflow) = self.dp.overflowing_sub(1);
         if overflow {
             return Err(Error::DataPointerOutOfBounds);
         }
         self.dp = value;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     // increment the byte at the data pointer by one modulo 256.
     #[inline]
-    fn execute_inc(&mut self) -> Result<InstructionPointer> {
+    fn execute_inc(&mut self) -> Result<()> {
         let byte = self.read_byte()?;
         self.write_byte(byte.wrapping_add(1))?;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     // decrement the byte at the data pointer by one modulo 256.
     #[inline]
-    fn execute_dec(&mut self) -> Result<InstructionPointer> {
+    fn execute_dec(&mut self) -> Result<()> {
         let byte = self.read_byte()?;
         self.write_byte(byte.wrapping_sub(1))?;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     #[cfg(not(feature = "thread-safe"))]
     // accept one byte of input, storing its value in the byte at the data pointer
     #[inline]
-    fn execute_in(&mut self) -> Result<InstructionPointer> {
+    fn execute_in(&mut self) -> Result<()> {
         let c = self.reader.read_one()?;
         self.write_byte(c)?;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     #[cfg(feature = "thread-safe")]
     // accept one byte of input, storing its value in the byte at the data pointer
     #[inline]
-    fn execute_in(&mut self) -> Result<InstructionPointer> {
+    fn execute_in(&mut self) -> Result<()> {
         let c = self
             .reader
             .try_write()
@@ -223,64 +229,30 @@ impl<'a> AbstractMachine<'a> {
             .read_one()?;
         self.write_byte(c)?;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     #[cfg(not(feature = "thread-safe"))]
     // output the byte at the data pointer
     #[inline]
-    fn execute_out(&mut self) -> Result<InstructionPointer> {
+    fn execute_out(&mut self) -> Result<()> {
         let byte = self.read_byte()?;
         self.writer.write_all(&[byte])?;
         self.writer.flush()?;
 
-        Ok(InstructionPointer::Next)
+        Ok(())
     }
 
     #[cfg(feature = "thread-safe")]
     // output the byte at the data pointer
     #[inline]
-    fn execute_out(&mut self) -> Result<InstructionPointer> {
+    fn execute_out(&mut self) -> Result<()> {
         let byte = self.read_byte()?;
         let mut writer = self.writer.try_write().map_err(|_| Error::RwLock)?;
         writer.write_all(&[byte])?;
         writer.flush()?;
 
-        Ok(InstructionPointer::Next)
-    }
-
-    // if the byte at the data pointer is zero, instead of moving the instruction pointer
-    // forward to the next command, jump it forward to the command after the matching ']'
-    // command
-    fn execute_openbrk(&mut self) -> Result<InstructionPointer> {
-        if self.read_byte()? == 0 {
-            let matching_pos = find_matching(self.ip, &self.program)?;
-            self.ip = matching_pos + 1;
-
-            Ok(InstructionPointer::Jump(matching_pos + 1))
-        } else {
-            // we only insert the location of the `[` if it isn't already on the top of the
-            // stack
-            let must_insert = self.stack.last().map(|&x| x != self.ip).unwrap_or(true);
-            if must_insert {
-                self.stack.push(self.ip);
-            }
-
-            Ok(InstructionPointer::Next)
-        }
-    }
-
-    // if the byte at the data pointer is nonzero, then instead of moving the instruction
-    // pointer forward to the next command, jump it back to the command after the matching
-    // '['
-    fn execute_closebrk(&mut self) -> Result<InstructionPointer> {
-        if self.read_byte()? == 0 {
-            self.stack.pop();
-            Ok(InstructionPointer::Next)
-        } else {
-            let pos = *self.stack.last().ok_or(Error::NoMatchingBracket(self.ip))?;
-            Ok(InstructionPointer::Jump(pos + 1))
-        }
+        Ok(())
     }
 
     pub fn to_debug_info(&self) -> DebugInfo {
@@ -289,39 +261,25 @@ impl<'a> AbstractMachine<'a> {
             current_cell: self.mem[self.dp],
             instruction_pointer: self.ip,
             current_instruction: self.program[self.ip],
-            top_of_stack: self.stack.last().copied(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum InstructionPointer {
-    Next,
-    Jump(usize),
-}
+fn build_bracket_mapping(program: &[u8]) -> Result<HashMap<usize, usize>> {
+    let mut stack = Vec::new();
+    let mut res = HashMap::new();
 
-// Given the position of an opening bracket (`pos`), it tries to find, in the `program`, the
-// position of the matching closing bracket. It returns `Ok(usize)` if there is a matching closing
-// bracket or `Err` otherwise.
-fn find_matching(pos: usize, program: &[u8]) -> Result<usize> {
-    let mut curr = pos + 1;
-    let mut skipped = 0_u32;
-
-    while curr < program.len() {
-        if program[curr] == b']' {
-            if skipped == 0 {
-                return Ok(curr);
-            } else {
-                skipped -= 1;
-            }
-        } else if program[curr] == b'[' {
-            skipped += 1;
+    for (pos, &b) in program.iter().enumerate() {
+        if b == b'[' {
+            stack.push(pos);
+        } else if b == b']' {
+            let open = stack.pop().ok_or(Error::NoMatchingBracket(pos))?;
+            res.insert(open, pos);
+            res.insert(pos, open);
         }
-
-        curr += 1;
     }
 
-    Err(Error::NoMatchingBracket(pos))
+    Ok(res)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -330,7 +288,6 @@ pub struct DebugInfo {
     pub current_cell: u8,
     pub instruction_pointer: usize,
     pub current_instruction: u8,
-    pub top_of_stack: Option<usize>,
 }
 
 #[cfg(test)]
@@ -343,7 +300,8 @@ mod tests {
             {
                 let reader = Arc::new(RwLock::new(&b"hello"[..]));
                 let writer = Arc::new(RwLock::new(Vec::new()));
-                let mut $machine = AbstractMachine::new($program, reader, writer);
+                let mut $machine =
+                    AbstractMachine::new($program, reader, writer).expect("valid program");
 
                 $body
             }
@@ -352,7 +310,8 @@ mod tests {
             {
                 let mut reader = &b"hello"[..];
                 let mut writer = Vec::new();
-                let mut $machine = AbstractMachine::new($program, &mut reader, &mut writer);
+                let mut $machine = AbstractMachine::new($program, &mut reader, &mut writer)
+                    .expect("valid program");
 
                 $body
             }
@@ -382,53 +341,10 @@ mod tests {
     }
 
     #[test]
-    fn find_matching_success() {
-        let program = [b'[', b']'];
-        assert_eq!(1, find_matching(0, &program).expect("should find matching"));
-        let program = [b'>', b']', b'[', b'.', b']'];
-        assert_eq!(4, find_matching(2, &program).expect("should find matching"));
-        let program = [b'[', b'[', b'[', b']', b']', b']'];
-        for (matching, pos) in [(5, 0), (4, 1), (3, 2)] {
-            assert_eq!(
-                matching,
-                find_matching(pos, &program).expect("should find matching")
-            );
-        }
-    }
-
-    #[test]
-    fn find_matching_failure() {
-        let program = [b'[', b']', b'[', b'>', b'[', b']'];
-        assert_eq!(5, find_matching(4, &program).expect("should find matching"));
-        assert!(find_matching(2, &program).is_err());
-    }
-
-    #[test]
-    fn insert_open_bracket_on_stack() {
-        let program = Arc::new([b'[', b'+', b']', b'>']);
-        build_and_test!(program, machine, {
-            machine = machine.with_mem(vec![1, 2, 3]);
-            machine.step().expect("valid operation");
-            assert_eq!(machine.stack.last(), Some(&0));
-        });
-    }
-
-    #[test]
-    fn skip_insert_existing_open_bracket_on_stack() {
-        let program = Arc::new([b'[', b'+', b']', b'>']);
-        build_and_test!(program, machine, {
-            machine = machine.with_mem(vec![1, 2, 3]).with_stack(vec![0]);
-            machine.step().expect("valid operation");
-            assert_eq!(machine.stack.last(), Some(&0));
-            assert_eq!(1, machine.stack.len());
-        });
-    }
-
-    #[test]
     fn jump_to_instruction_after_matching_open_bracket() {
         let program = Arc::new([b'[', b'+', b']', b'>']);
         build_and_test!(program, machine, {
-            machine = machine.with_mem(vec![1, 2, 3]).with_stack(vec![0]);
+            machine = machine.with_mem(vec![1, 2, 3]);
             machine.ip = 2; // ip points to ']'
             machine.step().expect("valid operation");
             // instruction pointer points at the instruction after '['
