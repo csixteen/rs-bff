@@ -3,7 +3,7 @@ mod ext;
 
 use std::{
     collections::HashMap,
-    io,
+    io, ptr,
     sync::{Arc, RwLock},
 };
 
@@ -100,6 +100,17 @@ impl<'a> AbstractMachine<'a> {
     fn with_mem(mut self, mem: Vec<u8>) -> Self {
         self.mem = mem;
         self
+    }
+
+    pub fn restart(&mut self) {
+        self.dp = 0;
+        self.ip = 0;
+
+        unsafe {
+            let capacity = self.mem.capacity();
+            let mem_ptr = self.mem.as_mut_ptr();
+            ptr::write_bytes(mem_ptr, 0x0, capacity);
+        }
     }
 
     pub fn run(&mut self) -> Result<()> {

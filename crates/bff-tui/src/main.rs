@@ -3,10 +3,15 @@ mod error;
 mod ui;
 
 use std::{
-    io,
+    cell::RefCell,
+    fs, io,
+    path::PathBuf,
+    rc::Rc,
     sync::{Arc, RwLock},
 };
 
+use bff_core::{AbstractMachine, ReadOne};
+use clap::{Parser, ValueHint};
 use ratatui::{
     Terminal,
     backend::Backend,
@@ -24,7 +29,22 @@ use self::{
     ui::ui,
 };
 
+/// Brainfuck debugger
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Number of memory cells that the abstract machine will operate on
+    #[arg(short, long, default_value_t = AbstractMachine::DEFAULT_NUM_CELLS)]
+    cells: usize,
+
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
+    file: PathBuf,
+}
+
 fn main() -> Result<()> {
+    let Args { cells, file } = Args::parse();
+    let program = fs::read(file)?;
+
     // setup terminal
     enable_raw_mode()?;
     let mut stderr = io::stderr();
@@ -34,7 +54,7 @@ fn main() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // create the app and run it
-    run(&mut terminal)?;
+    run(&mut terminal, program, cells)?;
 
     // restore terminal
     disable_raw_mode()?;
@@ -48,13 +68,20 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn run<B: Backend>(terminal: &mut Terminal<B>) -> Result<()>
+fn run<B: Backend>(terminal: &mut Terminal<B>, program: Vec<u8>, cells: usize) -> Result<()>
 where
     Error: From<B::Error>,
 {
-    let input = Arc::new(RwLock::new(Vec::new()));
     let output = Arc::new(RwLock::new(Vec::new()));
-    let mut app = App::new(Arc::clone(&input), Arc::clone(&output));
+    let machine = Rc::new(RefCell::new(
+        AbstractMachine::new(
+            program.as_slice().into(),
+            Arc::new(RwLock::new(FakeReader)),
+            output.clone(),
+        )?
+        .with_num_cells(cells),
+    ));
+    let mut app = App::new(Arc::clone(&output), &program, machine);
 
     loop {
         terminal.draw(|f| ui(f, &app))?;
@@ -67,7 +94,7 @@ where
 
             match app.current_screen() {
                 CurrentScreen::Main => match key.code {
-                    KeyCode::Char('r') => app = app.into_running_mode(Default::default())?,
+                    KeyCode::Char('r') => app = app.into_running_mode(Default::default()),
                     KeyCode::Char('q') => app = app.with_current_screen(CurrentScreen::Exiting),
                     // scrolling keys
                     KeyCode::Char('h') => app = app.scroll_left(),
@@ -78,8 +105,9 @@ where
                 },
                 CurrentScreen::Running => match key.code {
                     KeyCode::Enter => app.run_program()?,
-                    KeyCode::Char('o') => app = app.into_running_mode(RunningMode::OneShot)?,
-                    KeyCode::Char('s') => app = app.into_running_mode(RunningMode::StepByStep)?,
+                    KeyCode::Char('o') => app = app.into_running_mode(RunningMode::OneShot),
+                    KeyCode::Char('s') => app = app.into_running_mode(RunningMode::StepByStep),
+                    KeyCode::Char('r') => app.restart()?,
                     KeyCode::Esc => app = app.with_current_screen(CurrentScreen::Main),
                     _ => (),
                 },
@@ -90,5 +118,13 @@ where
                 },
             }
         }
+    }
+}
+
+struct FakeReader;
+
+impl ReadOne for FakeReader {
+    fn read_one(&mut self) -> bff_core::Result<u8> {
+        todo!()
     }
 }

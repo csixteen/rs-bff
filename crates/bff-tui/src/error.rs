@@ -2,9 +2,6 @@ use std::sync::TryLockError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("should this happen?")]
-    AbstractMachineMissing,
-
     #[error(transparent)]
     BffCore(#[from] bff_core::Error),
 

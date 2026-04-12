@@ -4,49 +4,49 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bff_core::{AbstractMachine, ReadOne};
+use bff_core::AbstractMachine;
 use ratatui::{text::Line, widgets::ScrollbarState};
 
 use crate::error::{Error, Result};
 
 pub struct App<'a> {
-    input: Arc<RwLock<Vec<u8>>>,
     output: Arc<RwLock<Vec<u8>>>,
+    program: &'a [u8],
     horizontal_scroll: usize,
     horizontal_scroll_state: ScrollbarState,
     vertical_scroll: usize,
     vertical_scroll_state: ScrollbarState,
     current_screen: CurrentScreen,
     running_mode: RunningMode,
-    machine: Option<Rc<RefCell<AbstractMachine<'a>>>>,
+    machine: Rc<RefCell<AbstractMachine<'a>>>,
 }
 
 impl<'a> App<'a> {
-    pub fn new(input: Arc<RwLock<Vec<u8>>>, output: Arc<RwLock<Vec<u8>>>) -> Self {
+    pub fn new(
+        output: Arc<RwLock<Vec<u8>>>,
+        program: &'a [u8],
+        machine: Rc<RefCell<AbstractMachine<'a>>>,
+    ) -> Self {
         Self {
-            input,
             output,
+            program,
             horizontal_scroll: 0,
             horizontal_scroll_state: Default::default(),
             vertical_scroll: 0,
             vertical_scroll_state: Default::default(),
             current_screen: Default::default(),
             running_mode: Default::default(),
-            machine: None,
+            machine,
         }
     }
 
     pub fn run_program(&self) -> Result<()> {
-        if let Some(machine) = &self.machine {
-            match self.running_mode {
-                RunningMode::StepByStep => machine.borrow_mut().step()?,
-                RunningMode::OneShot => machine.borrow_mut().run()?,
-            }
-
-            return Ok(());
+        match self.running_mode {
+            RunningMode::StepByStep => self.machine.borrow_mut().step()?,
+            RunningMode::OneShot => self.machine.borrow_mut().run()?,
         }
 
-        Err(Error::AbstractMachineMissing)
+        Ok(())
     }
 
     pub fn with_current_screen(self, current_screen: CurrentScreen) -> Self {
@@ -56,26 +56,12 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn into_running_mode(self, running_mode: RunningMode) -> Result<Self> {
-        let machine = Some(match self.machine {
-            Some(m) => m,
-            None => {
-                let program: Arc<[u8]> = self.input.try_read()?.as_slice().into();
-                let reader = Arc::new(RwLock::new(FakeReader));
-                Rc::new(RefCell::new(AbstractMachine::new(
-                    program,
-                    reader,
-                    self.output.clone(),
-                )?))
-            }
-        });
+    pub fn program_to_lines(&self, line_width: usize) -> Vec<Line<'_>> {
+        bytes_to_lines(self.program, WrapLine::Width(line_width))
+    }
 
-        Ok(Self {
-            current_screen: CurrentScreen::Running,
-            running_mode,
-            machine,
-            ..self
-        })
+    pub fn output(&self) -> Result<Vec<u8>> {
+        Ok(self.output.try_read()?.iter().cloned().collect())
     }
 
     #[inline]
@@ -86,6 +72,32 @@ impl<'a> App<'a> {
     #[inline]
     pub fn running_mode(&self) -> RunningMode {
         self.running_mode
+    }
+
+    #[inline]
+    pub fn into_running_mode(self, running_mode: RunningMode) -> Self {
+        Self {
+            current_screen: CurrentScreen::Running,
+            running_mode,
+            ..self
+        }
+    }
+
+    pub fn restart(&self) -> Result<()> {
+        self.clear_output()?;
+        self.machine
+            .try_borrow_mut()
+            .map_err(|_| Error::Lock)?
+            .restart();
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn clear_output(&self) -> Result<()> {
+        self.output.try_write().map_err(|_| Error::Lock)?.clear();
+
+        Ok(())
     }
 
     #[inline]
@@ -131,24 +143,37 @@ impl<'a> App<'a> {
             ..self
         }
     }
+}
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub enum WrapLine {
+    #[default]
+    Never,
+    Width(usize),
+}
+
+pub fn bytes_to_lines(xs: &[u8], wrap: WrapLine) -> Vec<Line<'_>> {
     #[inline]
-    pub fn input(&self) -> Result<Vec<u8>> {
-        Ok(self.input.try_read()?.to_owned())
+    fn break_lines(xs: &[u8]) -> Vec<Line<'_>> {
+        let mut res = Vec::new();
+
+        for line in xs.split(|&b| b == b'\n') {
+            res.push(String::from_utf8_lossy(line).into_owned().into());
+        }
+        res
     }
 
-    #[inline]
-    pub fn input_to_lines(&self, line_width: usize) -> Result<Vec<Line<'_>>> {
-        let mut lines = Vec::new();
+    match wrap {
+        WrapLine::Never => break_lines(xs),
+        WrapLine::Width(width) => {
+            let mut res = Vec::new();
 
-        for chunk in self.input()?.chunks(line_width) {
-            for parts in chunk.split(|&b| b == b'\n') {
-                let s = String::from_utf8_lossy(parts).into_owned();
-                lines.push(Line::from(s));
+            for chunk in xs.chunks(width) {
+                res.extend(break_lines(chunk));
             }
-        }
 
-        Ok(lines)
+            res
+        }
     }
 }
 
@@ -165,12 +190,4 @@ pub enum RunningMode {
     StepByStep,
     #[default]
     OneShot,
-}
-
-struct FakeReader;
-
-impl ReadOne for FakeReader {
-    fn read_one(&mut self) -> bff_core::Result<u8> {
-        todo!()
-    }
 }

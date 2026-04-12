@@ -1,5 +1,6 @@
 mod footer;
 mod middle;
+mod output;
 mod title;
 
 use ratatui::{
@@ -16,6 +17,7 @@ pub fn ui(frame: &mut Frame, app: &App) {
         .constraints([
             Constraint::Length(3),
             Constraint::Min(5),
+            Constraint::Length(10),
             Constraint::Length(3),
         ])
         .split(frame.area());
@@ -24,5 +26,8 @@ pub fn ui(frame: &mut Frame, app: &App) {
     if let Err(e) = self::middle::render(frame, chunks[1], app) {
         eprintln!("{}", e);
     }
-    self::footer::render(frame, chunks[2], app);
+    if let Err(e) = self::output::render(frame, chunks[2], app) {
+        eprintln!("{}", e);
+    }
+    self::footer::render(frame, chunks[3], app);
 }

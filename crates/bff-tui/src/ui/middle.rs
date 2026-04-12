@@ -18,10 +18,15 @@ pub fn render<'a>(frame: &'a mut Frame, rect: Rect, app: &'a App) -> Result<()> 
         .border_style(Style::default())
         .title_alignment(Alignment::Center)
         .title("Use h j k l or ◄ ▲ ▼ ► to scroll");
-    let input_data = app.input_to_lines(middle_layout[0].width as usize - 2)?;
+    let input_data = app.program_to_lines(middle_layout[0].width as usize - 2);
     let text = Text::from(input_data).style(Style::default().fg(Color::White));
     let input = Paragraph::new(text).block(input_block);
     frame.render_widget(input, middle_layout[0]);
+
+    let debug_block = Block::bordered()
+        .border_style(Style::default())
+        .title_alignment(Alignment::Center)
+        .title("Debug info");
 
     // Left-hand side, the editor
     // let input_block = Block::bordered()

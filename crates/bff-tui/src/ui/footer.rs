@@ -28,10 +28,14 @@ pub fn render(frame: &mut Frame, rect: Rect, app: &App) {
     let keys_hint_text = match app.current_screen() {
         CurrentScreen::Main => Span::styled("(r)un | (q)uit", Style::default().fg(Color::White)),
         CurrentScreen::Running => match app.running_mode() {
-            RunningMode::StepByStep => {
-                Span::styled("Enter (step)", Style::default().fg(Color::Green))
-            }
-            RunningMode::OneShot => Span::styled("Enter (run)", Style::default().fg(Color::Green)),
+            RunningMode::StepByStep => Span::styled(
+                "Enter (step) | (o)ne shot | (r)estart",
+                Style::default().fg(Color::Green),
+            ),
+            RunningMode::OneShot => Span::styled(
+                "Enter (run) | (s)tep | (r)estart",
+                Style::default().fg(Color::Green),
+            ),
         },
         CurrentScreen::Exiting => {
             Span::styled("ESC (go to Main) | (q)uit", Style::default().fg(Color::Red))

@@ -11,5 +11,6 @@ license = "MIT"
 [dependencies]
 anyhow.workspace = true
 bff-core = { workspace = true, features = ["thread-safe"] }
+clap = { workspace = true, features = ["derive"] }
 ratatui.workspace = true
 thiserror.workspace = true
