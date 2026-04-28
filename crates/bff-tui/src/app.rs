@@ -57,8 +57,8 @@ impl<'a> App<'a> {
     }
 
     #[inline]
-    pub fn program_to_lines(&self, line_width: usize) -> Vec<Line<'_>> {
-        bytes_to_lines(self.program, WrapLine::Width(line_width))
+    pub fn program_to_lines(&self, wrap: WrapLine) -> Vec<Line<'_>> {
+        bytes_to_lines(self.program, wrap)
     }
 
     #[inline]
@@ -161,6 +161,16 @@ impl<'a> App<'a> {
             horizontal_scroll_state: self.horizontal_scroll_state.position(horizontal_scroll),
             ..self
         }
+    }
+
+    #[inline]
+    pub fn vertical_scroll(&self) -> usize {
+        self.vertical_scroll
+    }
+
+    #[inline]
+    pub fn vertical_scroll_state_mut(&mut self) -> &mut ScrollbarState {
+        &mut self.vertical_scroll_state
     }
 }
 

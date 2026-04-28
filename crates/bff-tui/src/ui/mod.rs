@@ -10,7 +10,7 @@ use ratatui::{
 
 use super::app::App;
 
-pub fn ui(frame: &mut Frame, app: &App) {
+pub fn ui(frame: &mut Frame, app: &mut App) {
     // Layout
     let chunks = Layout::default()
         .direction(Direction::Vertical)

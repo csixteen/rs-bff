@@ -84,7 +84,7 @@ where
     let mut app = App::new(Arc::clone(&output), &program, machine);
 
     loop {
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| ui(f, &mut app))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind == event::KeyEventKind::Release {

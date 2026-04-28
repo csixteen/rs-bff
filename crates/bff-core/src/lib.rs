@@ -271,7 +271,7 @@ impl<'a> AbstractMachine<'a> {
             data_pointer: self.dp,
             current_cell: self.mem[self.dp],
             instruction_pointer: self.ip,
-            current_instruction: self.program[self.ip],
+            current_instruction: self.program[self.ip.min(self.program.len().saturating_sub(1))],
         }
     }
 }
