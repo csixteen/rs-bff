@@ -56,12 +56,31 @@ impl<'a> App<'a> {
         }
     }
 
+    #[inline]
     pub fn program_to_lines(&self, line_width: usize) -> Vec<Line<'_>> {
         bytes_to_lines(self.program, WrapLine::Width(line_width))
     }
 
+    #[inline]
     pub fn output(&self) -> Result<Vec<u8>> {
         Ok(self.output.try_read()?.iter().cloned().collect())
+    }
+
+    #[inline]
+    pub fn debug_info(&self) -> Vec<Line<'_>> {
+        let di = self.machine.borrow().to_debug_info();
+
+        vec![
+            format!("Data pointer: {:#x}", di.data_pointer).into(),
+            format!("Current cell: {:#x}", di.current_cell).into(),
+            format!("Instruction pointer: {:#x}", di.instruction_pointer).into(),
+            format!(
+                "Current instruction: {:#x} ({c})",
+                di.current_instruction,
+                c = di.current_instruction as char
+            )
+            .into(),
+        ]
     }
 
     #[inline]

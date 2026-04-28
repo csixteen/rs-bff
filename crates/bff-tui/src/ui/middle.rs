@@ -27,35 +27,9 @@ pub fn render<'a>(frame: &'a mut Frame, rect: Rect, app: &'a App) -> Result<()> 
         .border_style(Style::default())
         .title_alignment(Alignment::Center)
         .title("Debug info");
-
-    // Left-hand side, the editor
-    // let input_block = Block::bordered()
-    //    .border_style(if matches!(app.current_screen(), CurrentScreen::Editing) {
-    //        Style::new().yellow()
-    //    } else {
-    //        Style::default()
-    //    })
-    //    .title("Input");
-    // let input_data = app.input_to_lines(middle_layout[0].width as usize - 2)?;
-    // let text = Text::from(input_data).style(Style::default().fg(Color::White));
-    // let new_lines = text.height().saturating_sub(1);
-    // let input = Paragraph::new(text).block(input_block);
-    // frame.render_widget(input, middle_layout[0]);
-
-    // Render cursor
-    // if matches!(app.current_screen(), CurrentScreen::Editing)
-    //    && matches!(app.editing_mode(), crate::app::EditingMode::Insert)
-    //{
-    //    frame.set_cursor_position(Position::new(
-    //        middle_layout[0].x
-    //            + (app.cursor_index() as u16 % (middle_layout[0].width - 1))
-    //            + 1
-    //            + new_lines as u16,
-    //        middle_layout[0].y + (app.cursor_index() as u16 / (middle_layout[0].width - 1)) + 1,
-    //    ));
-    //}
-
-    // Right-hand side, the debug info
+    let debug_text = Text::from(app.debug_info()).style(Style::default().fg(Color::Blue));
+    let debug = Paragraph::new(debug_text).block(debug_block);
+    frame.render_widget(debug, middle_layout[1]);
 
     Ok(())
 }
