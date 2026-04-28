@@ -27,6 +27,13 @@ pub fn render<'a>(frame: &'a mut Frame, rect: Rect, app: &'a mut App) -> Result<
         .block(input_block)
         .scroll((app.vertical_scroll() as u16, 0));
     frame.render_widget(input, middle_layout[0]);
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓")),
+        middle_layout[0],
+        app.vertical_scroll_state_mut(),
+    );
 
     let debug_block = Block::bordered()
         .border_style(Style::default())
@@ -35,13 +42,6 @@ pub fn render<'a>(frame: &'a mut Frame, rect: Rect, app: &'a mut App) -> Result<
     let debug_text = Text::from(app.debug_info()).style(Style::default().fg(Color::Blue));
     let debug = Paragraph::new(debug_text).block(debug_block);
     frame.render_widget(debug, middle_layout[1]);
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓")),
-        middle_layout[1],
-        app.vertical_scroll_state_mut(),
-    );
 
     Ok(())
 }
