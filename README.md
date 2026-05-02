@@ -2,16 +2,16 @@
 
 Simple [Brainfuck](https://esolangs.org/wiki/Brainfuck) interpreter.
 
-# Installing
+## Installing
 
 ```
 $ make install
 ```
 
-# Usage
+## Usage
 
 ```
-Usage: rs-bff [OPTIONS]
+Usage: bff [OPTIONS]
 
 Options:
   -c, --cells <CELLS>  Number of memory cells that the abstract machine will operate on [default: 30000]
@@ -21,33 +21,27 @@ Options:
 ```
 
 ```
-$ rs-bff -f hello.bf
+$ bff -f ./tests/hello.bf
 Hello, world!
 ```
 
 You can also omit `-f`, in which case stdin can be used:
 
 ```
-$ rs-bff < ./tests/hello.bf
+$ bff < ./tests/hello.bf
 Hello, world!
+```
+
+You can also run the interpreter with a TUI:
+
+```
+$ bff-tui -f ./tests/hello.bf
 ```
 
 ## Testing
 
 ```
-cargo run -- -f tests/hello2.bf
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
-     Running `target/debug/rs-bff -f tests/hello2.bf`
-Hello, world!
-cargo run -- -f tests/hello3.bf
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
-     Running `target/debug/rs-bff -f tests/hello3.bf`
-Hello World!
-cargo run -- -f tests/hello.bf
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
-     Running `target/debug/rs-bff -f tests/hello.bf`
-Hello, world!
-[test] finished!
+make test
 ```
 
 ## Limitations

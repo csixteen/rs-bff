@@ -8,4 +8,5 @@ test: ${JOBS} ; @echo "[$@] finished!"
 ${JOBS}: job%: ; cargo run -p bff --release -- -f tests/$*.bf
 
 install:
-	cargo install --path .
+	cargo install --path crates/bff
+	cargo install --path crates/bff-tui
