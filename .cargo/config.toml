@@ -2,7 +2,7 @@
 rustflags = [
     "-C",
     "link-arg=-fuse-ld=lld",
-#    "--no-rosegment",
+    "-Clink-arg=-Wl,--no-rosegment"
 ]
 
 [env]
