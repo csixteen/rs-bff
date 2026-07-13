@@ -1,0 +1,31 @@
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    "-C",
+    "link-arg=-fuse-ld=lld",
+#    "--no-rosegment",
+]
+
+[env]
+RUST_BACKTRACE="1"
+RUST_LIB_BACKTRACE="0"
+RUSTC_BOOTSTRAP="1"
+
+[profile.bench]
+# Make stack traces and flamegraphs yield useful info.
+debug = true
+
+[profile.dev]
+rpath = true
+
+[profile.release]
+incremental = true
+opt-level = 2
+panic = "unwind"
+
+[profile.release-with-debug]
+# Performance-optimized build, but include debug symbols. Useful for performance analysis
+inherits = "release"
+debug = true
+
+[profile.rust-analyzer]
+inherits = "dev"
