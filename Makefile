@@ -11,9 +11,9 @@ install:
 	cargo install --locked --profile release --path crates/bff
 	cargo install --locked --profile release --path crates/bff-tui
 
-build-bench:
-	cargo build --locked -p bff --profile bench
+build-release-with-debug:
+	cargo build --locked -p bff --profile release-with-debug
 
 FILE_PREFIX := $(shell date "+%Y%m%d_%H%M%S")
-flamegraph: build-bench
-	flamegraph -o $(addprefix $(FILE_PREFIX), _bff.svg) -- target/release/bff -f tests/beer.bf
+flamegraph: build-release-with-debug
+	flamegraph -o $(addprefix $(FILE_PREFIX), _bff.svg) -- target/release-with-debug/bff -f tests/beer.bf
